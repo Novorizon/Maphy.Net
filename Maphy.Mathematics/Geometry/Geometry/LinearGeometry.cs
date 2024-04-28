@@ -152,11 +152,11 @@ namespace Maphy.Mathematics
         {
             for (var i = 0; i < 3; i++)
             {
-                var t0 = math.min((aabb.Min[i] - ray.origin[i]) / ray.direction[i],
-                    (aabb.Max[i] - ray.origin[i]) / ray.direction[i]);
+                var t0 = math.min((aabb.min[i] - ray.origin[i]) / ray.direction[i],
+                    (aabb.max[i] - ray.origin[i]) / ray.direction[i]);
 
-                var t1 = math.max((aabb.Min[i] - ray.origin[i]) / ray.direction[i],
-                    (aabb.Max[i] - ray.origin[i]) / ray.direction[i]);
+                var t1 = math.max((aabb.min[i] - ray.origin[i]) / ray.direction[i],
+                    (aabb.max[i] - ray.origin[i]) / ray.direction[i]);
 
                 tmin = math.max(t0, tmin);
                 tmax = math.min(t1, tmax);

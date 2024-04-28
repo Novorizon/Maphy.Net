@@ -46,7 +46,7 @@ namespace Maphy.Physics
             fix2 extremePoints1;
             for (int i = 0; i < AABB.NORMAL; i++)
             {
-                extremePoints0 = ExtremeProjectPoint(AABB.Normals[i], a.Min, a.Max);
+                extremePoints0 = ExtremeProjectPoint(AABB.Normals[i], a.min, a.max);
                 extremePoints1 = ExtremeProjectPoint(AABB.Normals[i], b.Points);
                 if (!IsOverlap(extremePoints0, extremePoints1))
                     return false;
@@ -54,7 +54,7 @@ namespace Maphy.Physics
 
             for (int i = 0; i < AABB.NORMAL; i++)
             {
-                extremePoints0 = ExtremeProjectPoint(AABB.Normals[i], b.Min, b.Max);
+                extremePoints0 = ExtremeProjectPoint(AABB.Normals[i], b.min, b.max);
                 extremePoints1 = ExtremeProjectPoint(AABB.Normals[i], a.Points);
                 if (!IsOverlap(extremePoints0, extremePoints1))
                     return false;
@@ -106,10 +106,10 @@ namespace Maphy.Physics
         /// SeparatingAxisTest  AABB Sphere
         internal static bool SeparatingAxisTest(AABB aabb, Sphere sphere)
         {
-            fix3 p = sphere.Center - aabb.Center;
+            fix3 p = sphere.Center - aabb.center;
 
             fix3 v = math.max(p, -p);
-            fix3 u = math.max(v - aabb.BevelRadius, fix3.zero);
+            fix3 u = math.max(v - aabb.extents, fix3.zero);
             return math.length(u) < sphere.Radius;
         }
 
@@ -151,8 +151,8 @@ namespace Maphy.Physics
         /// SeparatingAxisTest  OBB Sphere
         internal static bool SeparatingAxisTest(OBB obb, Sphere sphere)
         {
-            fix3 p = sphere.Center - obb.Center;
-            p = math.inverse(obb.Orientation) * p;
+            fix3 p = sphere.Center - obb.center;
+            p = math.inverse(obb.orientation) * p;
 
             fix3 v = math.max(p, -p);
             fix3 u = math.max(v - obb.BevelRadius, fix3.zero);
@@ -161,15 +161,15 @@ namespace Maphy.Physics
 
         internal static bool SeparatingAxisTest(AABB aabb, Capsule capsule)
         {
-            fix3 p = capsule.Center1 - aabb.Center;
+            fix3 p = capsule.Center1 - aabb.center;
             fix3 v = math.max(p, -p);
-            fix3 u = math.max(v - aabb.BevelRadius, fix3.zero);
+            fix3 u = math.max(v - aabb.extents, fix3.zero);
             if (math.length(u) < capsule.Radius)
                 return true;
 
-            p = capsule.Center2 - aabb.Center;
+            p = capsule.Center2 - aabb.center;
             v = math.max(p, -p);
-            u = math.max(v - aabb.BevelRadius, fix3.zero);
+            u = math.max(v - aabb.extents, fix3.zero);
             if (math.length(u) < capsule.Radius)
                 return true;
 
@@ -205,15 +205,15 @@ namespace Maphy.Physics
 
         internal static bool SeparatingAxisTest(OBB obb, Capsule capsule)
         {
-            fix3 p = capsule.Center1 - obb.Center;
-            p = math.inverse(obb.Orientation) * p;
+            fix3 p = capsule.Center1 - obb.center;
+            p = math.inverse(obb.orientation) * p;
             fix3 v = math.max(p, -p);
             fix3 u = math.max(v - obb.BevelRadius, fix3.zero);
             if (math.length(u) < capsule.Radius)
                 return true;
 
-            p = capsule.Center2 - obb.Center;
-            p = math.inverse(obb.Orientation) * p;
+            p = capsule.Center2 - obb.center;
+            p = math.inverse(obb.orientation) * p;
             v = math.max(p, -p);
             u = math.max(v - obb.BevelRadius, fix3.zero);
             if (math.length(u) < capsule.Radius)

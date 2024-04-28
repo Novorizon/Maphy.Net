@@ -3,114 +3,98 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    public struct AABB : Bounds
+    public struct AABB
     {
-        public static readonly int EDGE = 12;
-        public static readonly int FACE = 6;
         public static readonly int VERTEX = 8;
         public static readonly int NORMAL = 3;
 
         public static readonly fix[] triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 }; //暂时用于与AABB的相交检测
         public static readonly fix3[] Normals = new fix3[3] { fix3.right, fix3.up, fix3.forward };//x轴 左右法线，y轴上下法线，z轴前后法线
 
-        public fix3 Center { get; private set; }
-        public fix3 BevelRadius { get; private set; }
+        public fix3 center { get; private set; }
+        public fix3 _extents { get; private set; }
 
-        public fix3 Min { get; private set; }
-        public fix3 Max { get; private set; }
-        public AABB Bounds { get { return this; } }
-        public fix3[] Points { get; private set; }//上面 左前 左后 右后 右前 //下面 左前 左后 右后 右前 
-
-        public AABB(fix3 min, fix3 max)
+        public fix3 size
         {
-            Points = new fix3[VERTEX];
-
-            Min = min;
-            Max = max;
-
-            Center = (min + max) / 2;
-            BevelRadius = (max - min) / 2;
-
-            Points[0] = new fix3(Min.x, Max.y, Max.z);
-            Points[1] = new fix3(Min.x, Max.y, Min.z);
-            Points[2] = new fix3(Max.x, Max.y, Min.z);
-            Points[3] = Max;
-            Points[4] = new fix3(Min.x, Min.y, Max.z);
-            Points[5] = Min;
-            Points[6] = new fix3(Max.x, Min.y, Min.z);
-            Points[7] = new fix3(Max.x, Min.y, Max.z);
+            get { return _extents * 2f; }
+            set { _extents = value * 0.5f; }
         }
 
-        public AABB(AABB a, AABB b)
+        public fix3 extents
         {
-            Points = new fix3[VERTEX];
-            Min = new fix3(math.min(a.Min.x, b.Min.x), math.min(a.Min.y, b.Min.y), math.min(a.Min.z, b.Min.z));
-            Max = new fix3(math.max(a.Max.x, b.Max.x), math.max(a.Max.y, b.Max.y), math.max(a.Max.z, b.Max.z));
-
-            Center = (Min + Max) / 2;
-            BevelRadius = (Max - Min) / 2;
-
-            Points[0] = new fix3(Min.x, Max.y, Max.z);
-            Points[1] = new fix3(Min.x, Max.y, Min.z);
-            Points[2] = new fix3(Max.x, Max.y, Min.z);
-            Points[3] = Max;
-            Points[4] = new fix3(Min.x, Min.y, Max.z);
-            Points[5] = Min;
-            Points[6] = new fix3(Max.x, Min.y, Min.z);
-            Points[7] = new fix3(Max.x, Min.y, Max.z);
-
+            get { return _extents; }
+            set { _extents = value; }
         }
-        public void InitAABB(fix3 center, fix3 size)
+
+        public fix3 min
         {
-            Points = new fix3[VERTEX];
+            get { return center - extents; }
+            set { SetMinMax(value, max); }
+        }
 
-            Center = center;
-            BevelRadius = size / 2;
-            Min = center - size / 2;
-            Max = Min + size;
+        public fix3 max
+        {
+            get { return center + extents; }
+            set { SetMinMax(min, value); }
+        }
 
-            Points[0] = new fix3(Min.x, Max.y, Max.z);
-            Points[1] = new fix3(Min.x, Max.y, Min.z);
-            Points[2] = new fix3(Max.x, Max.y, Min.z);
-            Points[3] = Max;
-            Points[4] = new fix3(Min.x, Min.y, Max.z);
-            Points[5] = Min;
-            Points[6] = new fix3(Max.x, Min.y, Min.z);
-            Points[7] = new fix3(Max.x, Min.y, Max.z);
+        public void SetMinMax(fix3 min, fix3 max)
+        {
+            extents = (max - min) * 0.5f;
+            center = min + extents;
         }
 
 
-        public void Update(fix3 center)
+        //public AABB Bounds { get { return this; } }
+        //public fix3[] Points { get; private set; }//上面 左前 左后 右后 右前 //下面 左前 左后 右后 右前 
+
+        public AABB(fix3 center, fix3 size)
         {
-            fix3 offset = center - Center;
-            Center = center;
-            Min = Center - BevelRadius;
-            Max = Center + BevelRadius;
-            for (int i = 0; i < VERTEX; i++)
-            {
-                Points[i] += offset;
-            }
+            //Points = new fix3[VERTEX];
+            _extents = size/2;
+            this.center = center;
         }
 
-        public void Update(fix3 min, fix3 max)
-        {
-            Min = min;
-            Max = max;
-            Center = (min + max) / 2;
+        //public void SetPoints(fix3 min, fix3 max)
+        //{
+        //    Points = new fix3[VERTEX];
 
-            Points[0] = new fix3(Min.x, Max.y, Max.z);
-            Points[1] = new fix3(Min.x, Max.y, Min.z);
-            Points[2] = new fix3(Max.x, Max.y, Min.z);
-            Points[3] = Max;
-            Points[4] = new fix3(Min.x, Min.y, Max.z);
-            Points[5] = Min;
-            Points[6] = new fix3(Max.x, Min.y, Min.z);
-            Points[7] = new fix3(Max.x, Min.y, Max.z);
-        }
+        //    Points[0] = new fix3(min.x, max.y, max.z);
+        //    Points[1] = new fix3(min.x, max.y, min.z);
+        //    Points[2] = new fix3(max.x, max.y, min.z);
+        //    Points[3] = max;
+        //    Points[4] = new fix3(min.x, min.y, max.z);
+        //    Points[5] = min;
+        //    Points[6] = new fix3(max.x, min.y, min.z);
+        //    Points[7] = new fix3(max.x, min.y, max.z);
+        //}
 
-        public void UpdateBounds(fix3 min, fix3 max)
+        //public void Update(fix3 center)
+        //{
+        //    fix3 offset = center - this.center;
+        //    this.center = center;
+        //    min = this.center - extents;
+        //    max = this.center + extents;
+        //    for (int i = 0; i < VERTEX; i++)
+        //    {
+        //        Points[i] += offset;
+        //    }
+        //}
+
+        public fix3[] GetPoints()
         {
-            this = new AABB(min, max);
+            fix3[] points = new fix3[VERTEX];
+
+            points[0] = new fix3(min.x, max.y, max.z);
+            points[1] = new fix3(min.x, max.y, min.z);
+            points[2] = new fix3(max.x, max.y, min.z);
+            points[3] = max;
+            points[4] = new fix3(min.x, min.y, max.z);
+            points[5] = min;
+            points[6] = new fix3(max.x, min.y, min.z);
+            points[7] = new fix3(max.x, min.y, max.z);
+
+            return points;
         }
 
     }

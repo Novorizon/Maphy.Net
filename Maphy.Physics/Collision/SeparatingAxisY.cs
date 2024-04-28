@@ -8,9 +8,9 @@ namespace Maphy.Physics
     {
         internal static bool SeparatingAxisTestY(AABB a, OBB b)
         {
-            if (a.Center.y - a.BevelRadius.y >= b.Center.y + b.BevelRadius.y)
+            if (a.center.y - a.extents.y >= b.center.y + b.BevelRadius.y)
                 return false;
-            if (a.Center.y + a.BevelRadius.y <= b.Center.y - b.BevelRadius.y)
+            if (a.center.y + a.extents.y <= b.center.y - b.BevelRadius.y)
                 return false;
 
             fix2 points0 = ExtremeProjectPoint(AABB.Normals[0], a.Points);
@@ -40,9 +40,9 @@ namespace Maphy.Physics
         /// SeparatingAxisTest  OBB OBB
         internal static bool SeparatingAxisTestY(OBB a, OBB b)
         {
-            if (a.Center.y - a.BevelRadius.y >= b.Center.y + b.BevelRadius.y)
+            if (a.center.y - a.BevelRadius.y >= b.center.y + b.BevelRadius.y)
                 return false;
-            if (a.Center.y + a.BevelRadius.y <= b.Center.y - b.BevelRadius.y)
+            if (a.center.y + a.BevelRadius.y <= b.center.y - b.BevelRadius.y)
                 return false;
 
             fix2 points0 = ExtremeProjectPoint(a.Normals[0], a.Points);
@@ -71,8 +71,8 @@ namespace Maphy.Physics
         internal static bool SeparatingAxisTestY(AABB a, Capsule b)
         {
 
-            fix up = a.Center.y + a.BevelRadius.y;
-            fix down = a.Center.y - a.BevelRadius.y;
+            fix up = a.center.y + a.extents.y;
+            fix down = a.center.y - a.extents.y;
 
             if (down > b.Center1.y + b.Radius)
             {
@@ -80,10 +80,10 @@ namespace Maphy.Physics
             }
             else if (down > b.Center1.y && down <= b.Center1.y + b.Radius)
             {
-                fix3 p = b.Center1 - a.Center;
+                fix3 p = b.Center1 - a.center;
 
                 fix3 v = math.max(p, -p);
-                fix3 u = math.max(v - a.BevelRadius, fix3.zero);
+                fix3 u = math.max(v - a.extents, fix3.zero);
                 return math.length(u) < b.Radius;
 
             }
@@ -93,18 +93,18 @@ namespace Maphy.Physics
             }
             else if (up > b.Center2.y - b.Radius && up <= b.Center2.y)
             {
-                fix3 p = b.Center2 - a.Center;
+                fix3 p = b.Center2 - a.center;
 
                 fix3 v = math.max(p, -p);
-                fix3 u = math.max(v - a.BevelRadius, fix3.zero);
+                fix3 u = math.max(v - a.extents, fix3.zero);
                 return math.length(u) < b.Radius;
 
             }
             else
             {
-                fix2 CenterA = new fix2(a.Center.x, a.Center.z);
+                fix2 CenterA = new fix2(a.center.x, a.center.z);
                 fix2 CenterB = new fix2(b.Center.x, b.Center.z);
-                fix2 BevelRadius = new fix2(a.BevelRadius.x, a.BevelRadius.z);
+                fix2 BevelRadius = new fix2(a.extents.x, a.extents.z);
                 fix2 p = CenterB - CenterA;
 
                 fix2 v = math.max(p, -p);
@@ -117,8 +117,8 @@ namespace Maphy.Physics
         internal static bool SeparatingAxisTestY(OBB a, Capsule b)
         {
 
-            fix up = a.Center.y + a.BevelRadius.y;
-            fix down = a.Center.y - a.BevelRadius.y;
+            fix up = a.center.y + a.BevelRadius.y;
+            fix down = a.center.y - a.BevelRadius.y;
 
             if (down > b.Center1.y + b.Radius)
             {
@@ -126,7 +126,7 @@ namespace Maphy.Physics
             }
             else if (down > b.Center1.y && down <= b.Center1.y + b.Radius)
             {
-                fix3 p = b.Center1 - a.Center;
+                fix3 p = b.Center1 - a.center;
 
                 fix3 v = math.max(p, -p);
                 fix3 u = math.max(v - a.BevelRadius, fix3.zero);
@@ -139,7 +139,7 @@ namespace Maphy.Physics
             }
             else if (up > b.Center2.y - b.Radius && up <= b.Center2.y)
             {
-                fix3 p = b.Center2 - a.Center;
+                fix3 p = b.Center2 - a.center;
 
                 fix3 v = math.max(p, -p);
                 fix3 u = math.max(v - a.BevelRadius, fix3.zero);
@@ -148,7 +148,7 @@ namespace Maphy.Physics
             }
             else
             {
-                fix2 CenterA = new fix2(a.Center.x, a.Center.z);
+                fix2 CenterA = new fix2(a.center.x, a.center.z);
                 fix2 CenterB = new fix2(b.Center.x, b.Center.z);
                 fix2 BevelRadius = new fix2(a.BevelRadius.x, a.BevelRadius.z);
                 fix2 p = CenterB - CenterA;
