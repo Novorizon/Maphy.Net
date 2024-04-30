@@ -4,13 +4,14 @@ using Maphy.Mathematics;
 namespace Maphy.Physics
 {
     [Serializable]
-    public struct Sphere : Bounds
+    public struct Sphere : Shape
     {
         public fix3 Center { get; private set; }
         public fix Radius { get; private set; }
         public fix Radius2 { get; private set; }
         public AABB Bounds { get; private set; }
         fix3 R;
+        public ShapeType Type { get => ShapeType.Sphere; }
 
         public Sphere(fix3 center, fix radius)
         {

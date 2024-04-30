@@ -163,7 +163,7 @@ namespace Maphy.Physics
             p = obb.orientation * p;
 
             fix3 v = math.max(p, -p);
-            fix3 u = math.max(v - obb.BevelRadius, fix3.zero);
+            fix3 u = math.max(v - obb.extents, fix3.zero);
             if (math.length(u) <= sphere.Radius)
             {
                 return true;

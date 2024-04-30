@@ -5,10 +5,11 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    public struct Bounds : IEquatable<Bounds>
+    public struct FatAABB : IEquatable<FatAABB>
     {
         private fix3 center;
         private fix3 extents;
+        private int expansion;
 
         public fix3 Center
         {
@@ -23,7 +24,7 @@ namespace Maphy.Physics
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return extents * 2f; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { extents = value * 0.5f; }
+            set { extents = value * fix._0_5; }
         }
 
         public fix3 Extents
@@ -51,10 +52,11 @@ namespace Maphy.Physics
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Bounds(fix3 center, fix3 size)
+        public FatAABB(fix3 center, fix3 size, int expansion=1)
         {
             this.center = center;
-            extents = size * 0.5f;
+            extents = size * fix._0_5;
+            this.expansion = expansion;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,35 +68,35 @@ namespace Maphy.Physics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override bool Equals(object other)
         {
-            if (!(other is Bounds))
+            if (!(other is FatAABB))
             {
                 return false;
             }
 
-            return Equals((Bounds)other);
+            return Equals((FatAABB)other);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Equals(Bounds other)
+        public bool Equals(FatAABB other)
         {
             return center.Equals(other.center) && extents.Equals(other.extents);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool operator ==(Bounds lhs, Bounds rhs)
+        public static bool operator ==(FatAABB lhs, FatAABB rhs)
         {
             return lhs.center == rhs.center && lhs.extents == rhs.extents;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool operator !=(Bounds lhs, Bounds rhs)
+        public static bool operator !=(FatAABB lhs, FatAABB rhs)
         {
             return !(lhs == rhs);
         }
 
         public void Expand(float amount)
         {
-            amount *= 0.5f;
+            amount *= fix._0_5;
             extents += new fix3(amount, amount, amount);
         }
 

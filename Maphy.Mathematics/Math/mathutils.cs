@@ -12,10 +12,35 @@ namespace Maphy.Mathematics
             return (dot(a, b) / dot(b, b)) * b;
         }
 
+        /// <summary>
+        /// 向量a在向量b上的投影
+        /// 投影=投影的模与b的模 的比例，乘以b
+        /// </summary>
+        /// <param name="a"></param>
+        /// <param name="b"></param>
+        /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix3 project(fix3 a, fix3 b)
         {
             return (dot(a, b) / dot(b, b)) * b;
+        }
+
+        /// <summary>
+        /// 投影的模
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static fix3 projectLength(fix3 a, fix3 b)
+        {
+            return dot(a, b) / sqrt(dot(b, b));
+        }
+
+        /// <summary>
+        /// a在b上的投影prj，投影的模与b的模的比值
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static fix3 projectRatio(fix3 a, fix3 b)
+        {
+            return dot(a, b) / dot(b, b);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -5,8 +5,9 @@ using Maphy.Mathematics;
 namespace Maphy.Physics
 {
     [Serializable]
-    public struct OBB
+    public struct OBB : Shape
     {
+        public ShapeType Type { get => ShapeType.OBB; }
         public fix3 center { get; private set; }
         public fix3 _extents { get; private set; }
         public quaternion orientation { get; private set; }

@@ -3,7 +3,7 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    public struct AABB
+    public struct AABB: Shape
     {
         public static readonly int VERTEX = 8;
         public static readonly int NORMAL = 3;
@@ -37,6 +37,8 @@ namespace Maphy.Physics
             get { return center + extents; }
             set { SetMinMax(min, value); }
         }
+
+        public ShapeType Type { get => ShapeType.AABB;}
 
         public void SetMinMax(fix3 min, fix3 max)
         {
