@@ -1,5 +1,6 @@
 
 using Maphy.Mathematics;
+using Maphy.Physics;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -7,7 +8,7 @@ using System.Numerics;
 namespace Maphy.Tree
 {
     // QuadTree 类
-    public class QuadTree<T> where T : notnull
+    public class QuadTree
     {
         public enum Quadrant
         {
@@ -22,8 +23,8 @@ namespace Maphy.Tree
         // Node 类，表示四叉树的节点
         public class Node : IDisposable
         {
-            private static int id = 0;
-            public int Id { get; set; }
+            private static ulong id = 100000000;
+            public ulong Id { get; set; }
 
 
             // 节点的四个子节点
@@ -33,20 +34,22 @@ namespace Maphy.Tree
             public Node SouthEast;
 
             //实际节点的id
-            public List<int> nodeIds;
+            public List<ulong> nodeIds;
+            //叶子结点
+            public List<ulong> leaves;
 
-            public T value;
+            public Collider collider;
             // 节点的边界框
             public AABB2D bounds;
 
             public int level;
             public Quadrant quadrant;
 
-            public Node(T value, AABB2D bounds)
+            public Node(Collider collider, AABB2D bounds)
             {
-                Id = id++;
+                Id = collider.id;
                 this.bounds = bounds;
-                this.value = value;
+                this.collider = collider;
             }
 
             public Node(AABB2D bounds, int level = 0, Quadrant quadrant = Quadrant.None)
@@ -55,17 +58,17 @@ namespace Maphy.Tree
                 this.bounds = bounds;
                 this.level = level;
                 this.quadrant = quadrant;
-                nodeIds = new List<int>();
+                nodeIds = new List<ulong>();
             }
 
             public Node(Node node)
             {
                 Id = node.Id;
                 bounds = node.bounds;
-                value = node.value;
+                collider = node.collider;
                 level = node.level;
                 quadrant = node.quadrant;
-                nodeIds = new List<int>();
+                nodeIds = new List<ulong>();
                 int count = node.nodeIds.Count;
                 for (int i = 0; i < count; i++)
                 {
@@ -76,7 +79,7 @@ namespace Maphy.Tree
             public void Dispose()
             {
                 Id = 0;
-                value = default;
+                collider = default;
                 level = 0;
                 quadrant = Quadrant.None;
                 nodeIds.Clear();
@@ -84,8 +87,14 @@ namespace Maphy.Tree
             }
         }
 
-        Dictionary<int, Node> nodes = new Dictionary<int, Node>();
-        Dictionary<int, Node> virtuals = new Dictionary<int, Node>();
+        Dictionary<ulong, Node> nodes = new Dictionary<ulong, Node>();
+        Dictionary<ulong, Node> virtuals = new Dictionary<ulong, Node>();
+        public Dictionary<ulong, Node> Nodes
+        {
+            get { return nodes; }
+            private set { }
+        }
+
         // 根节点
         private Node root;
 
@@ -93,7 +102,7 @@ namespace Maphy.Tree
         private int capacity;
 
 
-        public QuadTree(T value, AABB2D bounds)
+        public QuadTree(Collider value, AABB2D bounds)
         {
             capacity = 1;
 
@@ -109,7 +118,7 @@ namespace Maphy.Tree
             root = CreateVirtualNode(bounds, 0);
         }
 
-        private Node CreateNode(T value, AABB2D bounds)
+        private Node CreateNode(Collider value, AABB2D bounds)
         {
             Node node = new Node(value, bounds);
             nodes.Add(node.Id, node);
@@ -124,12 +133,12 @@ namespace Maphy.Tree
             return node;
         }
 
-        public void Insert(T value, AABB2D bounds)
+        public void Insert(Collider value, AABB2D bounds)
         {
-            if (value == null)
-            {
-                return;
-            }
+            //if (value == null)
+            //{
+            //    return;
+            //}
 
             Node node = CreateNode(value, bounds);
 
@@ -154,7 +163,7 @@ namespace Maphy.Tree
 
         public void Insert(Node nodeNew)
         {
-            T value = nodeNew.value;
+            Collider value = nodeNew.collider;
             AABB2D bounds = nodeNew.bounds;
 
             // 使用队列进行广度优先遍历
@@ -194,7 +203,7 @@ namespace Maphy.Tree
                         //将数据分给子节点
                         for (int i = 0; i < count; i++)
                         {
-                            int id = node.nodeIds[i];
+                            ulong id = node.nodeIds[i];
                             Node temp = nodes[id];
 
                             List<Quadrant> indices = GetIndex(node, temp.bounds);
@@ -273,9 +282,9 @@ namespace Maphy.Tree
         }
 
         // 查询指定范围内的值
-        public List<T> Retrieve(AABB2D range)
+        public List<Collider> Retrieve(AABB2D range)
         {
-            List<T> results = new List<T>();
+            List<Collider> results = new List<Collider>();
             if (root == null)
                 return results;
 
@@ -296,10 +305,10 @@ namespace Maphy.Tree
                     int count = node.nodeIds.Count;
                     for (int i = 0; i < count; i++)
                     {
-                        int id = node.nodeIds[i];
+                        ulong id = node.nodeIds[i];
                         Node leaf = nodes[id];
                         if (AABB2D.Intersects(leaf.bounds, range))
-                            results.Add(leaf.value);
+                            results.Add(leaf.collider);
                     }
                 }
                 else

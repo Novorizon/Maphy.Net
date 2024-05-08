@@ -3,14 +3,22 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    public struct AABB: Shape
+    public struct AABB : Shape
     {
+        // 实现接口和矩形结构体之间的隐式转换操作符
+        public static AABB From(Shape shape)
+        {
+            return (AABB)shape;
+        }
+
         public static readonly int VERTEX = 8;
         public static readonly int NORMAL = 3;
+        public static readonly AABB Default = new AABB(fix3.zero, fix3.zero, 0);
 
         public static readonly fix[] triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 }; //暂时用于与AABB的相交检测
         public static readonly fix3[] Normals = new fix3[3] { fix3.right, fix3.up, fix3.forward };//x轴 左右法线，y轴上下法线，z轴前后法线
 
+        private ulong id;
         public fix3 center { get; private set; }
         public fix3 _extents { get; private set; }
 
@@ -38,7 +46,9 @@ namespace Maphy.Physics
             set { SetMinMax(min, value); }
         }
 
-        public ShapeType Type { get => ShapeType.AABB;}
+        public ShapeType Type { get => ShapeType.AABB; }
+
+        public ulong Id { get => id; }
 
         public void SetMinMax(fix3 min, fix3 max)
         {
@@ -50,11 +60,25 @@ namespace Maphy.Physics
         //public AABB Bounds { get { return this; } }
         //public fix3[] Points { get; private set; }//上面 左前 左后 右后 右前 //下面 左前 左后 右后 右前 
 
-        public AABB(fix3 center, fix3 size)
+        public AABB(fix3 center, fix3 size, ulong id = 0)
         {
             //Points = new fix3[VERTEX];
-            _extents = size/2;
+            _extents = size / 2;
             this.center = center;
+            this.id = id;
+        }
+
+        public AABB(AABB other)
+        {
+            _extents = other.extents;
+            this.center = other.center;
+            this.id = other.id;
+        }
+        public void Copy(AABB other)
+        {
+            _extents = other.extents;
+            this.center = other.center;
+            this.id = other.id;
         }
 
         //public void SetPoints(fix3 min, fix3 max)

@@ -54,10 +54,10 @@ namespace Maphy.Physics
 
 
 
-        //更新场景树
-        public void UpdateScene()
-        {
-        }
+        ////更新场景树
+        //public void UpdateScene()
+        //{
+        //}
 
         public Entity CreateEntity()
         {
@@ -65,15 +65,15 @@ namespace Maphy.Physics
             return entity;
         }
 
-        public Rigid CreateRigid(fix3 translation,quaternion orientation)
+        public ref Rigid CreateRigid(fix3 translation,quaternion orientation)
         {
-            Entity entity = new Entity(id++);
+            //Entity entity = new Entity(id++);
 
-            Rigid rigid = new Rigid();
+            Rigid rigid = RigidManager.CreateRigid();
             rigid.AddBoxCollider(id,translation,orientation);
 
             
-            return rigid;
+            return ref rigid;
         }
 
 

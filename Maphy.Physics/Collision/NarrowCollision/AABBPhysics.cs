@@ -119,6 +119,76 @@ namespace Maphy.Physics
         }
 
 
+        public static bool Overlaps(AABB a, OBB b)
+        {
+            // 如果两个AABB不重叠，则返回false
+            if (!IsOverlap(a, b))
+                return false;
+
+            // 初始化变量face，表示可能相交的面
+            Face face = Face.None;
+            // 根据相交的情况设置face的值
+            face = (a, b) switch
+            {
+                { a: _, b: _ } when (a.min.x <= b.max.x) => face | Face.Left,
+                { a: _, b: _ } when (a.max.x >= b.min.x) => face | Face.Right,
+                { a: _, b: _ } when (a.min.y <= b.max.y) => face | Face.Bottom,
+                { a: _, b: _ } when (a.max.y >= b.min.y) => face | Face.Top,
+                { a: _, b: _ } when (a.min.z <= b.max.z) => face | Face.Back,
+                { a: _, b: _ } when (a.max.z >= b.min.z) => face | Face.Front,
+                _ => face | Face.None,
+            };
+
+            // 如果没有相交的面，则返回false
+            if (face == Face.None)
+                return false;
+
+            // 遍历所有相交的面
+            while (face > 0)
+            {
+                // 获取当前面的法线向量
+                fix3 normal = GetFaceNormalOnAABB(a, face);
+                // 获取AABB上支撑点
+                fix3 supportPoint = GetSupportPoint(a, normal);
+
+                // 获取B上对应的点
+                fix3 vertex = (face) switch
+                {
+                    Face.Left => b.max,
+                    Face.Right => b.min,
+                    Face.Top => b.max,
+                    Face.Bottom => b.min,
+                    Face.Front => b.max,
+                    Face.Back => b.min,
+                    _ => fix3.MinValue,
+                };
+
+                // 计算穿透深度
+                decimal penetrationDepth = math.dot((vertex - supportPoint), normal);
+                if (penetrationDepth > 0)
+                {
+                    if (needCollisionInfo)
+                    {
+                        // 如果需要碰撞信息，则创建CollisionInfo对象
+                        CollisionInfo collisionInfo = new CollisionInfo(0, 0);
+                        collisionInfo.normal = normal;
+                        collisionInfo.penetrationDepth = penetrationDepth;
+                        //collisionInfo.contactPoint1 = -planeNormal * sphere.Center;
+                        //collisionInfo.contactPoint2 = sphere.Center + planeNormal * (penetrationDepth - sphere.Radius);
+                    }
+                    return true;
+                }
+                face = (Face)((int)face >> 1);
+            }
+            return false;
+        }
+
+        public static bool Overlaps(AABB a, Capsule b)
+        {
+            return Overlaps(a, b);
+        }
+
+
         public static AABB FromMinMax(fix3 min, fix3 max)
         {
             fix3 center = (min + max) / 2;

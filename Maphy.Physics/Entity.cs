@@ -4,8 +4,11 @@ using UnityEngine.UIElements;
 
 namespace Maphy.Physics
 {
+    //可能会用来存储多个刚体
     public struct Entity
     {
+        public static readonly Entity Default = new Entity(0);
+
         public ulong id;
         //世界坐标
         public fix3 translation;

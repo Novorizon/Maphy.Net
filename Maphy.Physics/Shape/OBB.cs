@@ -35,6 +35,8 @@ namespace Maphy.Physics
             set { SetMinMax(min, value); }
         }
 
+        public ulong Id => throw new NotImplementedException();
+
         public void SetMinMax(fix3 min, fix3 max)
         {
             extents = (max - min) * 0.5f;

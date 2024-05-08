@@ -19,6 +19,8 @@ namespace Maphy.Physics
 
         public ShapeType Type { get => ShapeType.Capsule; }
 
+        public ulong Id => throw new System.NotImplementedException();
+
         public Capsule(fix3 center, fix radius, fix height, quaternion rotation, fix3 axisOrigin)
         {
             Center = center;

@@ -16,6 +16,7 @@ namespace Maphy.Physics
 
     public interface Shape
     {
+        public ulong Id { get; }
         public ShapeType Type { get; }
     }
 }
