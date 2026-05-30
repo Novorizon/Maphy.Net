@@ -5,7 +5,7 @@ namespace Maphy.Mathematics
 {
     public struct Sector
     {
-        public static readonly int VERTEX = 2;//Ô²»¡¶Ëµã
+        public static readonly int VERTEX = 2;//åœ†å¼§ç«¯ç‚¹
         public fix3 center;
         public fix radius;
         public fix radius2;

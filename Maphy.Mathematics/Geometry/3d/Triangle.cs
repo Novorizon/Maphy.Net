@@ -10,7 +10,7 @@ namespace Maphy.Mathematics
         public fix3[] points;
         public fix3 normal;
 
-        /// Èı½ÇĞÎÖØĞÄ
+        /// ä¸‰è§’å½¢é‡å¿ƒ
         public fix3 centroid;
 
         public Triangle(fix3 a, fix3 b, fix3 c)

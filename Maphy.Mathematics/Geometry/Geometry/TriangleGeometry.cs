@@ -6,7 +6,7 @@ namespace Maphy.Mathematics
 {
     public static partial class Geometry
     {
-        /// Èı½ÇĞÎÊÇ·ñÏàÁÚ
+        /// ä¸‰è§’å½¢æ˜¯å¦ç›¸é‚»
         public static Tuple<bool, fix3, fix3> CoincideTriangle(Triangle TriangleA, Triangle TriangleB)
         {
             bool isCoincide = false;

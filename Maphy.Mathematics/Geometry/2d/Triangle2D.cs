@@ -14,7 +14,7 @@ namespace Maphy.Mathematics
         public fix2 a;
         public fix2 b;
         public fix2 c;
-        /// Èı½ÇĞÎÖØĞÄ
+        /// ä¸‰è§’å½¢é‡å¿ƒ
         public fix2 centroid;
 
         public Polygon polygon;

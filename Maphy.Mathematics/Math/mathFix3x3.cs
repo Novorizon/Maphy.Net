@@ -34,7 +34,7 @@ namespace Maphy.Mathematics
             return x * transpose(y);
         }
 
-        ///×ªÖÃ¾ØÕó
+        ///è½¬ç½®çŸ©é˜µ
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix3x3 transpose(fix3x3 v)
         {
@@ -44,7 +44,7 @@ namespace Maphy.Mathematics
                 v.c2.x, v.c2.y, v.c2.z);
         }
 
-        /// Äæ¾ØÕó
+        /// é€†çŸ©é˜µ
         public static fix3x3 inverse(fix3x3 m)
         {
             fix3 c0 = m.c0;
@@ -63,7 +63,7 @@ namespace Maphy.Mathematics
             return fix3x3(m0, m1, m2) * rcpDet;
         }
 
-        /// ĞĞÁĞÊ½
+        /// è¡Œåˆ—å¼
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix determinant(fix3x3 m)
         {

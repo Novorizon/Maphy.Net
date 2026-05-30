@@ -6,7 +6,7 @@ namespace Maphy.Mathematics
     public struct Hexagon
     {
         public static readonly int EDGE = 6;
-        public static readonly fix INEX = 0.86602540378445;//�ھ�:�⾶
+        public static readonly fix INEX = 0.86602540378445;//内径:外径
         public fix2[] points;
         public fix2[] edges;
         public fix2[] normals;

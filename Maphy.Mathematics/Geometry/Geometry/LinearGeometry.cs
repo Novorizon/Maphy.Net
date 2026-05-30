@@ -48,7 +48,7 @@ namespace Maphy.Mathematics
             return SpatialRelationship.INTERSECTING;
         }
 
-        //直线与三角形相交
+        //鐩寸嚎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship LineHitTriangle(Triangle triangle, Line line, out fix3 hit)
         {
             hit = fix3.MinValue;
@@ -66,7 +66,7 @@ namespace Maphy.Mathematics
             return SpatialRelationship.INTERSECTING;
         }
 
-        //直线与三角形相交
+        //鐩寸嚎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship LineHitTriangle(fix3[] triangle, fix3[] line, out fix3 hit)
         {
             hit = fix3.MinValue;
@@ -79,7 +79,7 @@ namespace Maphy.Mathematics
         }
 
 
-        //射线与三角形相交
+        //灏勭嚎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship RayHitTriangle(Triangle triangle, Ray ray, fix3 result)
         {
             fix3[] points = new fix3[3] { triangle.points[0], triangle.points[1], triangle.points[2] };
@@ -99,7 +99,7 @@ namespace Maphy.Mathematics
             return SpatialRelationship.INTERSECTING;
         }
 
-        //射线与三角形相交
+        //灏勭嚎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship RayHitTriangle(fix3[] triangle, fix3[] ray, fix3 result)
         {
             SpatialRelationship retFlag = linearIntersectTriangle(triangle, ray[0], ray[1], out fix3 ret);
@@ -113,7 +113,7 @@ namespace Maphy.Mathematics
         }
 
 
-        //线段与三角形相交
+        //绾挎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship SegmentHitTriangle(Triangle triangle, Segment segment, fix3 result)
         {
             fix3[] points = new fix3[3] { triangle.points[0], triangle.points[1], triangle.points[2] };
@@ -134,7 +134,7 @@ namespace Maphy.Mathematics
             return SpatialRelationship.INTERSECTING;
         }
 
-        //线段与三角形相交
+        //绾挎涓庝笁瑙掑舰鐩镐氦
         public static SpatialRelationship SegmentHitTriangle(fix3[] triangle, fix3[] segment, fix3 result)
         {
             fix3 direction = segment[1] - segment[0];

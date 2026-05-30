@@ -1,4 +1,4 @@
-﻿
+
 namespace Maphy.Mathematics
 {
     public static partial class trigonometric

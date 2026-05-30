@@ -1,4 +1,4 @@
-﻿
+
 using Maphy.Mathematics;
 
 namespace Maphy.Physics

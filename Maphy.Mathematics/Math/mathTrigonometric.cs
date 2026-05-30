@@ -147,17 +147,17 @@ namespace Maphy.Mathematics
         //    fix sin = x;
         //    fix t = 0.0001;
 
-        //    fix i = 1, negation = 1;//È¡·´
+        //    fix i = 1, negation = 1;//å–å
         //    fix sum;
-        //    fix index = x;//Ö¸Êı
-        //    long Factorial = 1;//½×³Ë
-        //    double TaylorExpansion = x;//Ì©ÀÕÕ¹¿ªÊ½ÇóºÍ
+        //    fix index = x;//æŒ‡æ•°
+        //    long Factorial = 1;//é˜¶ä¹˜
+        //    double TaylorExpansion = x;//æ³°å‹’å±•å¼€å¼æ±‚å’Œ
 
         //    while (abs(a) > t)
         //    {
-        //        Factorial = Factorial * (i + 1) * (i + 2);//Çó½×³Ë
-        //        index *= x * x;//Çónum2µÄ´Î·½
-        //        negation = -negation;//Ã¿´ÎÑ­»·È¡·´
+        //        Factorial = Factorial * (i + 1) * (i + 2);//æ±‚é˜¶ä¹˜
+        //        index *= x * x;//æ±‚num2çš„æ¬¡æ–¹
+        //        negation = -negation;//æ¯æ¬¡å¾ªç¯å–å
         //        sum = index / Factorial * negation;
         //        TaylorExpansion += sum;
         //        i += 2;
