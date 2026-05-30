@@ -35,7 +35,7 @@ namespace Maphy.Physics
             Center2 = center - math.normalize(Axis) * (height / 2 - radius);
         }
 
-        public void Update(fix3 center, quaternion rotation = default)
+        public void Update(fix3 center, quaternion rotation)
         {
             Center = center;
             Orientation = rotation;
@@ -45,4 +45,3 @@ namespace Maphy.Physics
         }
     }
 }
-

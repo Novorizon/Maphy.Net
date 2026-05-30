@@ -50,6 +50,11 @@ namespace Maphy.Physics
             return new AABB((min + max) * fix._0_5, max - min);
         }
 
+        public void Update(fix3 center)
+        {
+            this.center = center;
+        }
+
         public void SetMinMax(fix3 min, fix3 max)
         {
             _extents = (max - min) * fix._0_5;
