@@ -224,10 +224,10 @@ namespace Maphy.Mathematics
         public static bool operator !=(int a, fix b) { return (long)a << PRECISION != b.value; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix operator >>(fix x, int amount) { return new fix(x.value >> amount); }
+        public static fix operator >>(fix x, int amount) { return Raw(x.value >> amount); }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix operator <<(fix x, int amount) { return new fix(x.value << amount); }
+        public static fix operator <<(fix x, int amount) { return Raw(x.value << amount); }
         #endregion
 
 

@@ -14,13 +14,13 @@ namespace Maphy.Mathematics
         public const long ONE = 1L << PRECISION;
 
 
-        public static readonly fix Max = new fix((1L << (BITS - PRECISION - 1)) - 1);//可表示的最大值
-        public static readonly fix Min = new fix(-(1L << (BITS - PRECISION - 1)));//可表示的最小值
+        public static readonly fix Max = Raw(long.MaxValue);//可表示的最大值
+        public static readonly fix Min = Raw(long.MinValue + 1);//可表示的最小值
         public static readonly fix Max32 = new fix(2147483648L);//32位最大值
         public static readonly fix Min32 = -Max32;//32位最小值
-        public static readonly fix One = new fix(ONE);
-        public static readonly fix Zero = new fix(0);
-        public static readonly fix NaN = float.NaN;
+        public static readonly fix One = Raw(ONE);
+        public static readonly fix Zero = Raw(0);
+        public static readonly fix NaN = Raw(long.MinValue);
 
 
         public static readonly fix _0 = 0;

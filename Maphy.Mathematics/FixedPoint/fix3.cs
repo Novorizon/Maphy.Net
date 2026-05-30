@@ -83,6 +83,14 @@ namespace Maphy.Mathematics
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public fix3(long x)
+        {
+            this.x.value = x << fix.PRECISION;
+            this.y.value = x << fix.PRECISION;
+            this.z.value = x << fix.PRECISION;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator fix3(fix v) { return new fix3(v); }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -196,9 +204,9 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix3 operator /(fix b, fix3 a)
         {
-            a.x.value = (a.x.value << fix.PRECISION) / b.value;
-            a.y.value = (a.y.value << fix.PRECISION) / b.value;
-            a.z.value = (a.z.value << fix.PRECISION) / b.value;
+            a.x.value = (b.value << fix.PRECISION) / a.x.value;
+            a.y.value = (b.value << fix.PRECISION) / a.y.value;
+            a.z.value = (b.value << fix.PRECISION) / a.z.value;
 
             return a;
         }

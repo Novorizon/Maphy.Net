@@ -1,12 +1,9 @@
 
-using UnityEngine;
-
-
 namespace Maphy.Mathematics
 {
     public static partial class Geometry
     {
-        //Ã¿¸öµã ÔÚ·¨ÏßaxisÉÏµÄÍ¶Ó°µã
+        //æ¯ä¸ªç‚¹ åœ¨æ³•çº¿axisä¸Šçš„æŠ•å½±ç‚¹
         internal static fix2 ExtremeProjectPoint(fix3 axis, fix3[] points)
         {
             fix min = fix.Max;
@@ -20,7 +17,7 @@ namespace Maphy.Mathematics
             return new fix2(min, max);
         }
 
-        //¶Ëµã ÔÚ×Ô¼º·¨ÏßaxisÉÏµÄÍ¶Ó°µã
+        //ç«¯ç‚¹ åœ¨è‡ªå·±æ³•çº¿axisä¸Šçš„æŠ•å½±ç‚¹
         internal static fix2 ExtremeProjectPoint(fix3 axis, fix3 min, fix3 max)
         {
             fix a = math.dot(axis, min);

@@ -1,6 +1,5 @@
 
 using Maphy.Mathematics;
-using UnityEngine.UIElements;
 
 namespace Maphy.Physics
 {
@@ -10,7 +9,7 @@ namespace Maphy.Physics
         public static readonly Entity Default = new Entity(0);
 
         public ulong id;
-        //ÊÀ½ç×ø±ê
+        //ä¸–ç•Œåæ ‡
         public fix3 translation;
         public quaternion orientation;
 

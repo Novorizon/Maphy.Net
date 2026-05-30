@@ -1,31 +1,24 @@
-﻿
 using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
     public struct AABB : Shape
     {
-        // 实现接口和矩形结构体之间的隐式转换操作符
-        public static AABB From(Shape shape)
-        {
-            return (AABB)shape;
-        }
+        public const int VERTEX = 8;
+        public const int NORMAL = 3;
 
-        public static readonly int VERTEX = 8;
-        public static readonly int NORMAL = 3;
-        public static readonly AABB Default = new AABB(fix3.zero, fix3.zero, 0);
+        public static readonly fix[] triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
+        public static readonly fix3[] Normals = new fix3[3] { fix3.right, fix3.up, fix3.forward };
 
-        public static readonly fix[] triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 }; //暂时用于与AABB的相交检测
-        public static readonly fix3[] Normals = new fix3[3] { fix3.right, fix3.up, fix3.forward };//x轴 左右法线，y轴上下法线，z轴前后法线
-
-        private ulong id;
         public fix3 center { get; private set; }
         public fix3 _extents { get; private set; }
 
+        public ShapeType Type => ShapeType.AABB;
+
         public fix3 size
         {
-            get { return _extents * 2f; }
-            set { _extents = value * 0.5f; }
+            get { return _extents * fix._2; }
+            set { _extents = value * fix._0_5; }
         }
 
         public fix3 extents
@@ -36,92 +29,48 @@ namespace Maphy.Physics
 
         public fix3 min
         {
-            get { return center - extents; }
+            get { return center - _extents; }
             set { SetMinMax(value, max); }
         }
 
         public fix3 max
         {
-            get { return center + extents; }
+            get { return center + _extents; }
             set { SetMinMax(min, value); }
         }
 
-        public ShapeType Type { get => ShapeType.AABB; }
+        public AABB(fix3 center, fix3 size)
+        {
+            _extents = size * fix._0_5;
+            this.center = center;
+        }
 
-        public ulong Id { get => id; }
+        public static AABB FromMinMax(fix3 min, fix3 max)
+        {
+            return new AABB((min + max) * fix._0_5, max - min);
+        }
 
         public void SetMinMax(fix3 min, fix3 max)
         {
-            extents = (max - min) * 0.5f;
-            center = min + extents;
+            _extents = (max - min) * fix._0_5;
+            center = min + _extents;
         }
-
-
-        //public AABB Bounds { get { return this; } }
-        //public fix3[] Points { get; private set; }//上面 左前 左后 右后 右前 //下面 左前 左后 右后 右前 
-
-        public AABB(fix3 center, fix3 size, ulong id = 0)
-        {
-            //Points = new fix3[VERTEX];
-            _extents = size / 2;
-            this.center = center;
-            this.id = id;
-        }
-
-        public AABB(AABB other)
-        {
-            _extents = other.extents;
-            this.center = other.center;
-            this.id = other.id;
-        }
-        public void Copy(AABB other)
-        {
-            _extents = other.extents;
-            this.center = other.center;
-            this.id = other.id;
-        }
-
-        //public void SetPoints(fix3 min, fix3 max)
-        //{
-        //    Points = new fix3[VERTEX];
-
-        //    Points[0] = new fix3(min.x, max.y, max.z);
-        //    Points[1] = new fix3(min.x, max.y, min.z);
-        //    Points[2] = new fix3(max.x, max.y, min.z);
-        //    Points[3] = max;
-        //    Points[4] = new fix3(min.x, min.y, max.z);
-        //    Points[5] = min;
-        //    Points[6] = new fix3(max.x, min.y, min.z);
-        //    Points[7] = new fix3(max.x, min.y, max.z);
-        //}
-
-        //public void Update(fix3 center)
-        //{
-        //    fix3 offset = center - this.center;
-        //    this.center = center;
-        //    min = this.center - extents;
-        //    max = this.center + extents;
-        //    for (int i = 0; i < VERTEX; i++)
-        //    {
-        //        Points[i] += offset;
-        //    }
-        //}
 
         public fix3[] GetPoints()
         {
-            fix3[] points = new fix3[VERTEX];
-
-            points[0] = new fix3(min.x, max.y, max.z);
-            points[1] = new fix3(min.x, max.y, min.z);
-            points[2] = new fix3(max.x, max.y, min.z);
-            points[3] = max;
-            points[4] = new fix3(min.x, min.y, max.z);
-            points[5] = min;
-            points[6] = new fix3(max.x, min.y, min.z);
-            points[7] = new fix3(max.x, min.y, max.z);
-
-            return points;
+            fix3 min = this.min;
+            fix3 max = this.max;
+            return new fix3[VERTEX]
+            {
+                new fix3(min.x, max.y, max.z),
+                new fix3(min.x, max.y, min.z),
+                new fix3(max.x, max.y, min.z),
+                max,
+                new fix3(min.x, min.y, max.z),
+                min,
+                new fix3(max.x, min.y, min.z),
+                new fix3(max.x, min.y, max.z)
+            };
         }
-
     }
 }

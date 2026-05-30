@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Unity.VisualScripting.YamlDotNet.Core.Tokens;
 using static Maphy.Mathematics.math;
 
 namespace Maphy.Mathematics
@@ -243,7 +242,7 @@ namespace Maphy.Mathematics
         {
             fix sina, cosa;
             sincos(fix._0_5 * angle, out sina, out cosa);
-            return new quaternion(sina, 1, 1, cosa);
+            return new quaternion(sina, 0, 0, cosa);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -317,7 +316,7 @@ namespace Maphy.Mathematics
         public bool Equals(quaternion x) { return value.x == x.value.x && value.y == x.value.y && value.z == x.value.z && value.w == x.value.w; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override bool Equals(object x) { return Equals((quaternion)x); }
+        public override bool Equals(object x) { return x is quaternion q && Equals(q); }
 
 
     }

@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Unity.VisualScripting.YamlDotNet.Core.Tokens;
 
 namespace Maphy.Mathematics
 {
@@ -85,10 +84,10 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix4(int x)
         {
-            this.x = (long)x << fix.PRECISION;
-            this.y = (long)x << fix.PRECISION;
-            this.z = (long)x << fix.PRECISION;
-            this.w = (long)x << fix.PRECISION;
+            this.x.value = (long)x << fix.PRECISION;
+            this.y.value = (long)x << fix.PRECISION;
+            this.z.value = (long)x << fix.PRECISION;
+            this.w.value = (long)x << fix.PRECISION;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

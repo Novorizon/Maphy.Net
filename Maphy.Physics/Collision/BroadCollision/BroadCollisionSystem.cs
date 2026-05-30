@@ -1,7 +1,4 @@
-using Maphy.Tree;
-using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 
 namespace Maphy.Physics
 {
@@ -16,41 +13,80 @@ namespace Maphy.Physics
             this.collider1 = collider1;
         }
     }
-    public class BroadCollisionSystem
-    {
-        static QuadTree quadTree;
-        static Dictionary<int, List<Collider>> nodes = new Dictionary<int, List<Collider>>();
-        static List<BroadCollisionPair> broadCollisionPairs = new List<BroadCollisionPair>();
 
-        // 以叶子结点为单位，返回节点内的潜在碰撞对
+    public static class BroadCollisionSystem
+    {
+        private static readonly List<Collider> colliders = new List<Collider>();
+        private static readonly List<BroadCollisionPair> broadCollisionPairs = new List<BroadCollisionPair>();
+
+        public static IReadOnlyList<Collider> Colliders => colliders;
+
+        public static void Clear()
+        {
+            colliders.Clear();
+            broadCollisionPairs.Clear();
+        }
+
+        public static void Register(Collider collider)
+        {
+            for (int i = 0; i < colliders.Count; i++)
+            {
+                if (colliders[i].id == collider.id)
+                {
+                    colliders[i] = collider;
+                    return;
+                }
+            }
+
+            colliders.Add(collider);
+        }
+
+        public static bool Unregister(ulong colliderId)
+        {
+            for (int i = 0; i < colliders.Count; i++)
+            {
+                if (colliders[i].id == colliderId)
+                {
+                    colliders.RemoveAt(i);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static void SetColliders(IEnumerable<Collider> source)
+        {
+            colliders.Clear();
+            colliders.AddRange(source);
+        }
+
         public static List<BroadCollisionPair> Collision()
         {
-            List<List<Collider>> nodes = quadTree.GetCollidersInSameLeaf();
+            broadCollisionPairs.Clear();
 
-            foreach (var nodeList in nodes)
+            for (int i = 0; i < colliders.Count; i++)
             {
-                int count = nodeList.Count;
-                for (int i = 0; i < count; i++)
+                for (int j = i + 1; j < colliders.Count; j++)
                 {
-                    for (int j = i + 1; j < count; j++)
+                    if (IsBroadCollision(colliders[i], colliders[j]))
                     {
-                        if (IsBroadCollision(nodeList[i], nodeList[j]))
-                        {
-                            BroadCollisionPair pairs = new BroadCollisionPair(nodeList[i], nodeList[j]);
-                            broadCollisionPairs.Add(pairs);
-                        }
+                        broadCollisionPairs.Add(new BroadCollisionPair(colliders[i], colliders[j]));
                     }
                 }
             }
+
             return broadCollisionPairs;
         }
 
         public static bool IsBroadCollision(Collider a, Collider b)
         {
-            if (!quadTree.IsInSameLeaf(a, b))
+            if (a.id == b.id || a.shape == null || b.shape == null)
+            {
                 return false;
+            }
 
-            return quadTree.IsOverlap(a, b);
+            return Physics.IsOverlap(Physics.ComputeBounds(a.shape), Physics.ComputeBounds(b.shape));
         }
     }
 }

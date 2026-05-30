@@ -21,13 +21,13 @@ namespace Maphy.Physics
             Radius = radius;
             Radius2 = radius * radius;
             R = new fix3(Radius, Radius, Radius);
-            Bounds = new AABB(Center - R, Center + R);
+            Bounds = new AABB(Center, R * 2);
         }
 
         public void Update(fix3 center)
         {
             Center = center;
-            Bounds = new AABB(Center - R, Center + R);
+            Bounds = new AABB(Center, R * 2);
         }
     }
 

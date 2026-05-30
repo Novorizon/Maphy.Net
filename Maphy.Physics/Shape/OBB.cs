@@ -1,4 +1,3 @@
-
 using System;
 using Maphy.Mathematics;
 
@@ -7,118 +6,88 @@ namespace Maphy.Physics
     [Serializable]
     public struct OBB : Shape
     {
-        public ShapeType Type { get => ShapeType.OBB; }
+        public const int EDGE = 12;
+        public const int FACE = 6;
+        public const int VERTEX = 8;
+        public const int NORMAL = 3;
+
+        public static readonly fix[] Triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
+
+        public ShapeType Type => ShapeType.OBB;
         public fix3 center { get; private set; }
         public fix3 _extents { get; private set; }
         public quaternion orientation { get; private set; }
+
         public fix3 size
         {
-            get { return extents * 2f; }
-            set { extents = value * 0.5f; }
+            get { return _extents * fix._2; }
+            set { _extents = value * fix._0_5; }
         }
 
         public fix3 extents
         {
-            get { return extents; }
-            set { extents = value; }
+            get { return _extents; }
+            set { _extents = value; }
         }
 
         public fix3 min
         {
-            get { return orientation*(center - extents); }
+            get { return center - WorldExtents(); }
             set { SetMinMax(value, max); }
         }
 
         public fix3 max
         {
-            get { return orientation * (center + extents); }
+            get { return center + WorldExtents(); }
             set { SetMinMax(min, value); }
         }
 
-        public ulong Id => throw new NotImplementedException();
+        public OBB(fix3 center, fix3 size, quaternion rotation)
+        {
+            this.center = center;
+            _extents = size * fix._0_5;
+            orientation = rotation;
+        }
+
+        public void Update(fix3 center, quaternion rotation)
+        {
+            this.center = center;
+            orientation = rotation;
+        }
 
         public void SetMinMax(fix3 min, fix3 max)
         {
-            extents = (max - min) * 0.5f;
-            center = min + extents;
+            _extents = (max - min) * fix._0_5;
+            center = min + _extents;
         }
 
-
-        public static readonly int EDGE = 12;
-        public static readonly int FACE = 6;
-        public static readonly int VERTEX = 8;
-        public static readonly int NORMAL = 3;
-        public static readonly fix[] Triangles = new fix[36] { 0, 1, 5, 0, 4, 5, 2, 3, 7, 2, 6, 7, 0, 3, 7, 0, 4, 7, 1, 2, 6, 1, 5, 6, 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
-
-        //public fix3 Size { get; private set; }
-        //public fix3 BevelRadius { get; private set; }
-        //public AABB Bounds { get; private set; }
-        //public fix3 Min { get; private set; }
-        //public fix3 Max { get; private set; }
-
-        //public fix3[] Points { get; private set; }//上面左前 左后 右后 右前 下面左前 左后 右后 右前 
-        //public fix3[] PointNormals { get; private set; }//用于判断和点的位置关系
-        //public fix3[] Normals { get; private set; }//x轴 左右法线，y轴上下法线，z轴前后法线}
-
-        //fix3[] points;
-
-
-        public OBB(fix3 center, fix3 size,quaternion rotation)
+        public fix3[] GetPoints()
         {
-            this.center = center;
-           _extents= size/2;
-            orientation = rotation;
+            fix3 x = (orientation * fix3.right) * _extents.x;
+            fix3 y = (orientation * fix3.up) * _extents.y;
+            fix3 z = (orientation * fix3.forward) * _extents.z;
+
+            return new fix3[VERTEX]
+            {
+                center - x + y + z,
+                center - x + y - z,
+                center + x + y - z,
+                center + x + y + z,
+                center - x - y + z,
+                center - x - y - z,
+                center + x - y - z,
+                center + x - y + z
+            };
         }
-        //public void Update(fix3 center, fix3 forward, fix3 up)
-        //{
-        //    center = center;
-        //    orientation = quaternion.LookRotation(forward, up);
 
-        //    //Min = fix3.MaxValue;
-        //    //Max = fix3.MinValue;
-        //    //for (int i = 0; i < VERTEX; i++)
-        //    //{
-        //    //    Points[i] = orientation * (points[i] - this.center) + center;
-        //    //    Min = math.min(Min, Points[i]);
-        //    //    Max = math.max(Max, Points[i]);
-        //    //}
-
-        //    //Normals[0] = orientation * fix3.right;
-        //    //Normals[1] = orientation * fix3.up;
-        //    //Normals[2] = orientation * fix3.forward;
-
-        //    //PointNormals[0] = Points[0];
-        //    //PointNormals[1] = Points[3];
-        //    //PointNormals[2] = Points[4];
-        //    //PointNormals[3] = Points[1];
-        //    //Bounds = new AABB(Min, Max);
-        //}
-
-        //public void Update(fix3 center, quaternion rotation)
-        //{
-        //    center = center;
-        //    orientation = rotation;
-
-        //    Min = fix3.MaxValue;
-        //    Max = fix3.MinValue;
-        //    for (int i = 0; i < VERTEX; i++)
-        //    {
-        //        Points[i] = orientation * (points[i] - this.center) + center;
-        //        Min = math.min(Min, Points[i]);
-        //        Max = math.max(Max, Points[i]);
-        //    }
-
-        //    Normals[0] = orientation * fix3.right;
-        //    Normals[1] = orientation * fix3.up;
-        //    Normals[2] = orientation * fix3.forward;
-
-        //    PointNormals[0] = Points[0];
-        //    PointNormals[1] = Points[3];
-        //    PointNormals[2] = Points[4];
-        //    PointNormals[3] = Points[1];
-
-        //    Bounds = new AABB(Min, Max);
-        //}
+        private fix3 WorldExtents()
+        {
+            fix3 axisX = orientation * fix3.right;
+            fix3 axisY = orientation * fix3.up;
+            fix3 axisZ = orientation * fix3.forward;
+            return math.abs(axisX) * _extents.x
+                + math.abs(axisY) * _extents.y
+                + math.abs(axisZ) * _extents.z;
+        }
     }
 }
-

@@ -5,7 +5,7 @@ namespace Maphy.Mathematics
 {
     public struct AABB2D
     {
-        // AABB2D µÄÖĞĞÄµãºÍ´óĞ¡
+        // AABB2D çš„ä¸­å¿ƒç‚¹å’Œå¤§å°
         public fix2 Center { get; set; }
         public fix2 Extents { get; set; }
 
@@ -21,7 +21,7 @@ namespace Maphy.Mathematics
             center = min + extents;
         }
 
-        // AABB2D ÀàµÄ¹¹Ôìº¯Êı
+        // AABB2D ç±»çš„æ„é€ å‡½æ•°
         public AABB2D(fix2 center, fix2 size)
         {
             Center = center;
@@ -30,26 +30,26 @@ namespace Maphy.Mathematics
 
         public static bool Contains(AABB2D a, AABB2D b)
         {
-            if (a.min.x <= b.min.x && a.min.y <= b.min.y && a.max.x >= b.max.x && a.max.y >= b.max.y)
-                return true;
-            return false;
+            return a.min.x <= b.min.x
+                && a.min.y <= b.min.y
+                && a.max.x >= b.max.x
+                && a.max.y >= b.max.y;
         }
 
         public static bool Intersects(AABB2D a, AABB2D b)
         {
-            if (a.min.x <= b.min.x && a.min.y <= b.min.y && a.max.x >= b.min.x && a.max.y >= b.min.y)
-                return true;
-            if (a.min.x >= b.min.x && a.min.y >= b.min.y && a.min.x <= b.max.x && a.min.y <= b.max.y)
-                return true;
-            return false;
+            return a.min.x <= b.max.x
+                && a.max.x >= b.min.x
+                && a.min.y <= b.max.y
+                && a.max.y >= b.min.y;
         }
 
         public static AABB2D Merge(AABB2D a, AABB2D b)
         {
-            float minX = math.min(a.min.x, b.min.x);
-            float minY = math.min(a.min.y, b.min.y);
-            float maxX = math.max(a.max.x, b.max.x);
-            float maxY = math.max(a.max.y, b.max.y);
+            fix minX = math.min(a.min.x, b.min.x);
+            fix minY = math.min(a.min.y, b.min.y);
+            fix maxX = math.max(a.max.x, b.max.x);
+            fix maxY = math.max(a.max.y, b.max.y);
 
             fix2 center = new fix2((minX + maxX) / 2, (minY + maxY) / 2);
             fix2 size = new fix2(maxX - minX, maxY - minY);

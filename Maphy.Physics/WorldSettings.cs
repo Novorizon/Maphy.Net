@@ -1,5 +1,5 @@
-
 using Maphy.Mathematics;
+
 namespace Maphy.Physics
 {
     public struct WorldSettings
@@ -7,14 +7,17 @@ namespace Maphy.Physics
         public bool enableGravity;
         public fix gravity;
 
-        /// Velocity threshold for contact velocity restitution
-        public fix restitutionVelocityThreshold;
+        public static WorldSettings Default => new WorldSettings(true, -9.8f);
 
         public WorldSettings(bool enableGravity)
+            : this(enableGravity, -9.8f)
+        {
+        }
+
+        public WorldSettings(bool enableGravity, fix gravity)
         {
             this.enableGravity = enableGravity;
-            gravity = -9.8;
-            restitutionVelocityThreshold = fix._0_03;
+            this.gravity = gravity;
         }
     }
 }

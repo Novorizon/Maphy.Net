@@ -40,7 +40,7 @@ namespace Maphy.Physics
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return center - extents; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { min = value; }
+            set { SetMinMax(value, max); }
         }
 
         public fix3 max
@@ -48,7 +48,7 @@ namespace Maphy.Physics
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get { return center + extents; }
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            set { max = value; }
+            set { SetMinMax(min, value); }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -57,6 +57,13 @@ namespace Maphy.Physics
             this.center = center;
             extents = size * fix._0_5;
             this.expansion = expansion;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetMinMax(fix3 min, fix3 max)
+        {
+            extents = (max - min) * fix._0_5;
+            center = min + extents;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

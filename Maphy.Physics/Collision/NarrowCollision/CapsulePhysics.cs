@@ -8,12 +8,12 @@ namespace Maphy.Physics
     {
         internal static bool IsOverlap(Capsule capsule, fix3 point)
         {
-            //capsuleÖĞÖáÏßÉÏ ¾àÀëµã×î½üµÄµã
+            //capsuleä¸­è½´çº¿ä¸Š è·ç¦»ç‚¹æœ€è¿‘çš„ç‚¹
             fix3 closestPointOnSegment = GetClosestPointOnSegment(capsule.Center1, capsule.Center2, point);
 
             fix3 pointToSegment = closestPointOnSegment - point;
             fix pointSegmentDistanceSquare = math.lengthsq(pointToSegment);
-            if (pointSegmentDistanceSquare < capsule.Radius)
+            if (pointSegmentDistanceSquare < capsule.Radius2)
             {
                 return true;
             }
@@ -22,7 +22,7 @@ namespace Maphy.Physics
 
         internal static bool IsOverlap(Capsule a, Capsule b)
         {
-            //¶Ëµã¾àÀë
+            //ç«¯ç‚¹è·ç¦»
             fix dis = (a.Radius + b.Radius) * (a.Radius + b.Radius);
             if (math.distancesq(a.Center1, b.Center1) <= dis)
                 return true;

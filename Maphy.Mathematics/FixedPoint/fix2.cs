@@ -171,8 +171,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator /(fix b, fix2 a)
         {
-            a.x.value = (a.x.value << fix.PRECISION) / b.value;
-            a.y.value = (a.y.value << fix.PRECISION) / b.value;
+            a.x.value = (b.value << fix.PRECISION) / a.x.value;
+            a.y.value = (b.value << fix.PRECISION) / a.y.value;
 
             return a;
         }
