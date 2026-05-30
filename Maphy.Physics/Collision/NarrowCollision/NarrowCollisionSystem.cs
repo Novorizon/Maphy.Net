@@ -2,8 +2,12 @@ using System.Collections.Generic;
 
 namespace Maphy.Physics
 {
-    public class NarrowCollisionSystem
+    public sealed class NarrowCollisionSystem
     {
+        private readonly List<CollisionPair> collisionPairs = new List<CollisionPair>();
+
+        public IReadOnlyList<CollisionPair> CollisionPairs => collisionPairs;
+
         public struct CollisionPair
         {
             public Collider collider0;
@@ -16,18 +20,23 @@ namespace Maphy.Physics
             }
         }
 
-        public static void Collision()
+        public IReadOnlyList<CollisionPair> Collision(IEnumerable<BroadCollisionPair> pairs)
         {
-            List<BroadCollisionPair> pairs = CollisionSystem.pairs;
+            collisionPairs.Clear();
+
             foreach (BroadCollisionPair pair in pairs)
             {
-                Collision(pair.collider0.shape, pair.collider1.shape);
+                if (Test(pair.collider0.shape, pair.collider1.shape))
+                {
+                    collisionPairs.Add(new CollisionPair(pair.collider0, pair.collider1));
+                }
             }
+
+            return collisionPairs;
         }
 
-        public static bool Collision(Shape shape0, Shape shape1)
+        public static bool Test(Shape shape0, Shape shape1)
         {
-
             return Physics.Overlaps(shape0, shape1);
         }
     }

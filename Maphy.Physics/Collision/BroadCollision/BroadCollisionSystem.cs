@@ -14,64 +14,32 @@ namespace Maphy.Physics
         }
     }
 
-    public static class BroadCollisionSystem
+    public sealed class BroadCollisionSystem
     {
-        private static readonly List<Collider> colliders = new List<Collider>();
-        private static readonly List<BroadCollisionPair> broadCollisionPairs = new List<BroadCollisionPair>();
+        private readonly List<Collider> colliderBuffer = new List<Collider>();
+        private readonly List<BroadCollisionPair> broadCollisionPairs = new List<BroadCollisionPair>();
 
-        public static IReadOnlyList<Collider> Colliders => colliders;
+        public IReadOnlyList<BroadCollisionPair> Pairs => broadCollisionPairs;
 
-        public static void Clear()
+        public void Clear()
         {
-            colliders.Clear();
+            colliderBuffer.Clear();
             broadCollisionPairs.Clear();
         }
 
-        public static void Register(Collider collider)
+        public IReadOnlyList<BroadCollisionPair> Collision(IEnumerable<Collider> colliders)
         {
-            for (int i = 0; i < colliders.Count; i++)
-            {
-                if (colliders[i].id == collider.id)
-                {
-                    colliders[i] = collider;
-                    return;
-                }
-            }
-
-            colliders.Add(collider);
-        }
-
-        public static bool Unregister(ulong colliderId)
-        {
-            for (int i = 0; i < colliders.Count; i++)
-            {
-                if (colliders[i].id == colliderId)
-                {
-                    colliders.RemoveAt(i);
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        public static void SetColliders(IEnumerable<Collider> source)
-        {
-            colliders.Clear();
-            colliders.AddRange(source);
-        }
-
-        public static List<BroadCollisionPair> Collision()
-        {
+            colliderBuffer.Clear();
+            colliderBuffer.AddRange(colliders);
             broadCollisionPairs.Clear();
 
-            for (int i = 0; i < colliders.Count; i++)
+            for (int i = 0; i < colliderBuffer.Count; i++)
             {
-                for (int j = i + 1; j < colliders.Count; j++)
+                for (int j = i + 1; j < colliderBuffer.Count; j++)
                 {
-                    if (IsBroadCollision(colliders[i], colliders[j]))
+                    if (IsBroadCollision(colliderBuffer[i], colliderBuffer[j]))
                     {
-                        broadCollisionPairs.Add(new BroadCollisionPair(colliders[i], colliders[j]));
+                        broadCollisionPairs.Add(new BroadCollisionPair(colliderBuffer[i], colliderBuffer[j]));
                     }
                 }
             }
@@ -79,7 +47,7 @@ namespace Maphy.Physics
             return broadCollisionPairs;
         }
 
-        public static bool IsBroadCollision(Collider a, Collider b)
+        public bool IsBroadCollision(Collider a, Collider b)
         {
             if (a.id == b.id || a.shape == null || b.shape == null)
             {

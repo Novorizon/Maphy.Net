@@ -28,21 +28,9 @@ namespace Maphy.Physics
             OnCollision?.Invoke(collision);
         }
 
-        public Collider AddBoxCollider(fix3 center, fix3 size, quaternion rotation, bool isAabb = false)
+        public void SetCollider(ulong colliderId)
         {
-            Collider collider = new Collider();
-            if (isAabb)
-            {
-                collider.AddAABBCollider(id, center, size);
-            }
-            else
-            {
-                collider.AddOBBCollider(id, center, size, rotation);
-            }
-
-            colliderId = collider.id;
-            BroadCollisionSystem.Register(collider);
-            return collider;
+            this.colliderId = colliderId;
         }
     }
 }

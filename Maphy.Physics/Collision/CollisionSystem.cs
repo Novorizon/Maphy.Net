@@ -2,24 +2,28 @@ using System.Collections.Generic;
 
 namespace Maphy.Physics
 {
-    public static class CollisionSystem
+    public sealed class CollisionSystem
     {
-        public static List<BroadCollisionPair> pairs = new List<BroadCollisionPair>();
+        private readonly BroadCollisionSystem broadphase = new BroadCollisionSystem();
+        private readonly NarrowCollisionSystem narrowphase = new NarrowCollisionSystem();
 
-        public static void Collision()
+        public IReadOnlyList<BroadCollisionPair> BroadphasePairs => broadphase.Pairs;
+        public IReadOnlyList<NarrowCollisionSystem.CollisionPair> CollisionPairs => narrowphase.CollisionPairs;
+
+        public void Collision(IEnumerable<Collider> colliders)
         {
-            pairs = BroadCollisionSystem.Collision();
-            NarrowCollisionSystem.Collision();
+            IReadOnlyList<BroadCollisionPair> pairs = broadphase.Collision(colliders);
+            narrowphase.Collision(pairs);
         }
 
-        public static bool TestCollision(Collider a, Collider b)
+        public bool TestCollision(Collider a, Collider b)
         {
-            if (!BroadCollisionSystem.IsBroadCollision(a, b))
+            if (!broadphase.IsBroadCollision(a, b))
             {
                 return false;
             }
 
-            return NarrowCollisionSystem.Collision(a.shape, b.shape);
+            return NarrowCollisionSystem.Test(a.shape, b.shape);
         }
     }
 }
