@@ -155,6 +155,11 @@ namespace Maphy.Physics
             return collisionSystem.TestCollision(a, b);
         }
 
+        public bool TryGetCollision(Collider a, Collider b, out CollisionInfo collision)
+        {
+            return collisionSystem.TryGetCollision(a, b, out collision);
+        }
+
         private Collider RegisterCollider(Collider collider)
         {
             colliders[collider.id] = collider;

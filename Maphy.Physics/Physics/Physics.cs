@@ -4,8 +4,6 @@ namespace Maphy.Physics
 {
     public static partial class Physics
     {
-        static readonly bool needCollisionInfo = true;
-
         public enum Axis
         {
             XAxis,

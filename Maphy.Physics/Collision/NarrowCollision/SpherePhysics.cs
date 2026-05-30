@@ -27,21 +27,6 @@ namespace Maphy.Physics
                 return false;
             }
 
-            if (needCollisionInfo)
-            {
-                CollisionInfo collisionInfo = new CollisionInfo(0, 0);
-                collisionInfo.penetrationDepth = sumRadiuses - math.sqrt(squaredDistanceBetweenCenters);
-
-                if (collisionInfo.penetrationDepth > 0)
-                {
-                    collisionInfo.normal = squaredDistanceBetweenCenters > math.Epsilon
-                        ? math.normalize(vectorBetweenCenters)
-                        : fix3.up;
-                    collisionInfo.contactPoint1 = a.Center + collisionInfo.normal * a.Radius;
-                    collisionInfo.contactPoint2 = b.Center - collisionInfo.normal * b.Radius;
-                }
-            }
-
             return true;
         }
 
@@ -55,32 +40,6 @@ namespace Maphy.Physics
             if (sphereSegmentDistanceSquare >= sumRadius * sumRadius)
             {
                 return false;
-            }
-
-            if (needCollisionInfo)
-            {
-                CollisionInfo collisionInfo = new CollisionInfo(0, 0);
-                if (sphereSegmentDistanceSquare > math.Epsilon)
-                {
-                    fix sphereSegmentDistance = math.sqrt(sphereSegmentDistanceSquare);
-                    fix3 normal = sphereCenterToSegment / sphereSegmentDistance;
-                    collisionInfo.penetrationDepth = sumRadius - sphereSegmentDistance;
-                    collisionInfo.normal = normal;
-                    collisionInfo.contactPoint1 = a.Center + normal * a.Radius;
-                    collisionInfo.contactPoint2 = closestPointOnSegment - normal * b.Radius;
-                }
-                else
-                {
-                    collisionInfo.penetrationDepth = sumRadius;
-                    fix3 capsuleSegment = math.normalize(b.Center2 - b.Center1);
-                    fix cosA1 = math.abs(capsuleSegment.x);
-                    fix cosA2 = math.abs(capsuleSegment.y);
-                    collisionInfo.normal = cosA1 < cosA2
-                        ? math.cross(capsuleSegment, fix3.right)
-                        : math.cross(capsuleSegment, fix3.up);
-                    collisionInfo.contactPoint1 = a.Center + collisionInfo.normal * a.Radius;
-                    collisionInfo.contactPoint2 = a.Center - collisionInfo.normal * b.Radius;
-                }
             }
 
             return true;

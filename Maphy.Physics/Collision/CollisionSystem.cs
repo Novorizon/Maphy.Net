@@ -25,5 +25,23 @@ namespace Maphy.Physics
 
             return NarrowCollisionSystem.Test(a.shape, b.shape);
         }
+
+        public bool TryGetCollision(Collider a, Collider b, out CollisionInfo collision)
+        {
+            collision = default;
+            if (a.shape == null || b.shape == null)
+            {
+                return false;
+            }
+
+            BroadphaseProxy proxy0 = new BroadphaseProxy(a, Physics.ComputeBounds(a.shape));
+            BroadphaseProxy proxy1 = new BroadphaseProxy(b, Physics.ComputeBounds(b.shape));
+            if (!broadphase.IsBroadCollision(proxy0, proxy1))
+            {
+                return false;
+            }
+
+            return Physics.TryComputeContact(new BroadCollisionPair(proxy0, proxy1), out collision);
+        }
     }
 }

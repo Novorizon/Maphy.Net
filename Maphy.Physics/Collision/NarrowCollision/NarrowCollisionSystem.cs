@@ -8,15 +8,27 @@ namespace Maphy.Physics
 
         public IReadOnlyList<CollisionPair> CollisionPairs => collisionPairs;
 
-        public struct CollisionPair
+        public readonly struct CollisionPair
         {
-            public Collider collider0;
-            public Collider collider1;
+            public readonly BroadCollisionPairKey key;
+            public readonly ulong colliderId0;
+            public readonly ulong colliderId1;
+            public readonly ulong rigidId0;
+            public readonly ulong rigidId1;
+            public readonly Collider collider0;
+            public readonly Collider collider1;
+            public readonly CollisionInfo collision;
 
-            public CollisionPair(Collider collider0, Collider collider1)
+            public CollisionPair(BroadCollisionPair pair, CollisionInfo collision)
             {
-                this.collider0 = collider0;
-                this.collider1 = collider1;
+                key = pair.key;
+                colliderId0 = pair.colliderId0;
+                colliderId1 = pair.colliderId1;
+                rigidId0 = pair.rigidId0;
+                rigidId1 = pair.rigidId1;
+                collider0 = pair.collider0;
+                collider1 = pair.collider1;
+                this.collision = collision;
             }
         }
 
@@ -26,9 +38,9 @@ namespace Maphy.Physics
 
             foreach (BroadCollisionPair pair in pairs)
             {
-                if (Test(pair.collider0.shape, pair.collider1.shape))
+                if (Physics.TryComputeContact(pair, out CollisionInfo collision))
                 {
-                    collisionPairs.Add(new CollisionPair(pair.collider0, pair.collider1));
+                    collisionPairs.Add(new CollisionPair(pair, collision));
                 }
             }
 
@@ -38,6 +50,11 @@ namespace Maphy.Physics
         public static bool Test(Shape shape0, Shape shape1)
         {
             return Physics.Overlaps(shape0, shape1);
+        }
+
+        public static bool TryComputeContact(Shape shape0, Shape shape1, out CollisionInfo collision)
+        {
+            return Physics.TryComputeContact(shape0, shape1, out collision);
         }
     }
 }
