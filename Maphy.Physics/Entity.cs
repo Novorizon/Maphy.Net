@@ -2,7 +2,7 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    //¿ÉÄÜ»áÓÃÀ´´æ´¢¶à¸ö¸ÕÌå
+    //å¯èƒ½ä¼šç”¨æ¥å­˜å‚¨å¤šä¸ªåˆšä½“
     public struct Entity
     {
         public static readonly Entity Default = new Entity(0);

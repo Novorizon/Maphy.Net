@@ -1,8 +1,3 @@
-
-using Maphy.Mathematics;
-using Maphy.Tree;
-using System.Collections.Generic;
-
 namespace Maphy.Physics
 {
     public enum ShapeType
@@ -16,7 +11,6 @@ namespace Maphy.Physics
 
     public interface Shape
     {
-        public ulong Id { get; }
-        public ShapeType Type { get; }
+        ShapeType Type { get; }
     }
 }

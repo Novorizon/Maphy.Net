@@ -13,8 +13,6 @@ namespace Maphy.Physics
         fix3 R;
         public ShapeType Type { get => ShapeType.Sphere; }
 
-        public ulong Id => throw new NotImplementedException();
-
         public Sphere(fix3 center, fix radius)
         {
             Center = center;
