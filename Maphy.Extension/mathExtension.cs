@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using Maphy.Mathematics;
 using UnityEngine;
 
-namespace Mathematica
+namespace Maphy.Unity
 {
     public static partial class math
     {
@@ -34,7 +34,7 @@ namespace Mathematica
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix4x4 fix3x3(Matrix4x4 x)
+        public static fix4x4 fix4x4(Matrix4x4 x)
         {
             return new fix4x4(
             x.m00, x.m01, x.m02, x.m03,

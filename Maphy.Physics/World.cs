@@ -18,6 +18,7 @@ namespace Maphy.Physics
         public IReadOnlyDictionary<ulong, Collider> Colliders => colliders;
         public IReadOnlyList<BroadCollisionPair> BroadphasePairs => collisionSystem.BroadphasePairs;
         public IReadOnlyList<NarrowCollisionSystem.CollisionPair> CollisionPairs => collisionSystem.CollisionPairs;
+        public IReadOnlyList<ContactManifold> ContactManifolds => collisionSystem.ContactManifolds;
 
         public World()
             : this(WorldSettings.Default)

@@ -1,7 +1,9 @@
 {
-    "name": "Maphy.Net",
+    "name": "Maphy.Unity",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "Maphy.Net"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": true,
@@ -10,5 +12,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": true
+    "noEngineReferences": false
 }

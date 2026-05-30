@@ -37,7 +37,7 @@ namespace Maphy.Physics
             fix sphereSegmentDistanceSquare = math.lengthsq(sphereCenterToSegment);
             fix sumRadius = a.Radius + b.Radius;
 
-            if (sphereSegmentDistanceSquare >= sumRadius * sumRadius)
+            if (sphereSegmentDistanceSquare > sumRadius * sumRadius)
             {
                 return false;
             }
@@ -55,7 +55,7 @@ namespace Maphy.Physics
             fix3 p = sphere.Center - aabb.center;
             fix3 v = math.max(p, -p);
             fix3 u = math.max(v - aabb.extents, fix3.zero);
-            return math.length(u) <= sphere.Radius;
+            return math.lengthsq(u) <= sphere.Radius2;
         }
 
         public static bool IsOverlap(Sphere sphere, OBB obb)
@@ -63,7 +63,7 @@ namespace Maphy.Physics
             fix3 localCenter = quaternion.conjugate(obb.orientation) * (sphere.Center - obb.center);
             fix3 v = math.max(localCenter, -localCenter);
             fix3 u = math.max(v - obb.extents, fix3.zero);
-            return math.length(u) <= sphere.Radius;
+            return math.lengthsq(u) <= sphere.Radius2;
         }
     }
 }

@@ -6,14 +6,17 @@ namespace Maphy.Physics
     {
         private readonly BroadCollisionSystem broadphase = new BroadCollisionSystem();
         private readonly NarrowCollisionSystem narrowphase = new NarrowCollisionSystem();
+        private readonly ContactManifoldCache contactCache = new ContactManifoldCache();
 
         public IReadOnlyList<BroadCollisionPair> BroadphasePairs => broadphase.Pairs;
         public IReadOnlyList<NarrowCollisionSystem.CollisionPair> CollisionPairs => narrowphase.CollisionPairs;
+        public IReadOnlyList<ContactManifold> ContactManifolds => contactCache.ActiveManifolds;
 
         public void Collision(IEnumerable<Collider> colliders)
         {
             IReadOnlyList<BroadCollisionPair> pairs = broadphase.Collision(colliders);
             narrowphase.Collision(pairs);
+            contactCache.Update(narrowphase.CollisionPairs);
         }
 
         public bool TestCollision(Collider a, Collider b)

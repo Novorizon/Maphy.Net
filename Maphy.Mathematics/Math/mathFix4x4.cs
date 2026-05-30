@@ -33,7 +33,17 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix4x4 mul(fix4x4 x, fix4x4 y)
         {
-            return x * transpose(y);
+            return new fix4x4(
+                mul(x, y.c0),
+                mul(x, y.c1),
+                mul(x, y.c2),
+                mul(x, y.c3));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static fix4 mul(fix4x4 x, fix4 y)
+        {
+            return x.c0 * y.x + x.c1 * y.y + x.c2 * y.z + x.c3 * y.w;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

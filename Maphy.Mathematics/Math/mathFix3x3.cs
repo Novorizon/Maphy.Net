@@ -31,7 +31,16 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix3x3 mul(fix3x3 x, fix3x3 y)
         {
-            return x * transpose(y);
+            return new fix3x3(
+                mul(x, y.c0),
+                mul(x, y.c1),
+                mul(x, y.c2));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static fix3 mul(fix3x3 x, fix3 y)
+        {
+            return x.c0 * y.x + x.c1 * y.y + x.c2 * y.z;
         }
 
         ///转置矩阵

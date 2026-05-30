@@ -219,15 +219,20 @@ namespace Maphy.Mathematics
             if (a.value == 0)
                 return fix.Zero;
 
-            fix x = a;
-            long b = (x.value >> 2) + 1L;
-            x.value = (b + (a.value << fix.PRECISION) / x.value) >> 1;
-            while (x.value < b)
+            fix x = a > fix.One ? a : fix.One;
+            long scaled = a.value << fix.PRECISION;
+
+            while (true)
             {
-                b = x.value;
-                x.value = (x.value + (a.value << fix.PRECISION) / x.value) >> 1;
+                long current = x.value;
+                long next = (current + scaled / current) >> 1;
+                if (next >= current)
+                {
+                    return x;
+                }
+
+                x.value = next;
             }
-            return x;
         }
 
         //[MethodImpl(MethodImplOptions.AggressiveInlining)]

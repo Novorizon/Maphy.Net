@@ -1,17 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <NoWarn>CS8981</NoWarn>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Maphy.Mathematics\**\*.cs" />
-    <Compile Include="Maphy.Physics\**\*.cs" />
-    <Compile Include="Maphy.Tree\**\*.cs" />
+    <ProjectReference Include="..\Maphy.Net.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -55,7 +55,7 @@ namespace Maphy.Mathematics
         public static fix4 normalize(fix4 x) { return rsqrt(dot(x, x)) * x; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int csum(fix4 x) { return x.x + x.y + x.z; }
+        public static fix csum(fix4 x) { return x.x + x.y + x.z + x.w; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix4 round(fix4 x) { return new fix4(round(x.x), round(x.y), round(x.z), round(x.w)); }
