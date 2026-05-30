@@ -10,6 +10,7 @@ namespace Maphy.Physics
         private readonly Dictionary<ulong, Entity> entities;
         private readonly Dictionary<ulong, Rigid> rigids = new Dictionary<ulong, Rigid>();
         private readonly Dictionary<ulong, Collider> colliders = new Dictionary<ulong, Collider>();
+        private readonly List<ulong> rigidIds = new List<ulong>();
         private readonly List<ulong> colliderIds = new List<ulong>();
         private readonly CollisionSystem collisionSystem = new CollisionSystem();
 
@@ -33,8 +34,23 @@ namespace Maphy.Physics
 
         public void Update()
         {
+            Update(settings.timeStep);
+        }
+
+        public void Update(fix deltaTime)
+        {
+            if (deltaTime < fix.Zero)
+            {
+                deltaTime = fix.Zero;
+            }
+
+            IntegrateForces(deltaTime);
+            IntegrateTransforms(deltaTime);
             SyncColliders();
             collisionSystem.Collision(colliders.Values);
+            ResolveContacts();
+            CorrectPositions();
+            SyncColliders();
         }
 
         public Entity CreateEntity()
@@ -58,6 +74,7 @@ namespace Maphy.Physics
             };
 
             rigids.Add(rigid.id, rigid);
+            rigidIds.Add(rigid.id);
             return rigid;
         }
 
@@ -112,6 +129,73 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetRigidType(ulong rigidId, RigidType type)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.type = type;
+            rigids[rigidId] = rigid;
+
+            if (entities.TryGetValue(rigidId, out Entity entity))
+            {
+                entity.isStatic = type == RigidType.Static;
+                entities[rigidId] = entity;
+            }
+
+            return true;
+        }
+
+        public bool SetMass(ulong rigidId, fix mass)
+        {
+            if (mass < fix.Zero || !rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.mass = mass;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
+        public bool SetVelocity(ulong rigidId, fix3 velocity)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.velocity = velocity;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
+        public bool SetAcceleration(ulong rigidId, fix3 acceleration)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.acceleration = acceleration;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
+        public bool AddForce(ulong rigidId, fix3 force)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.AddForce(force);
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
         public Collider AddAABBCollider(ulong rigidId, fix3 center, fix3 size)
         {
             Collider collider = new Collider();
@@ -159,6 +243,177 @@ namespace Maphy.Physics
         public bool TryGetCollision(Collider a, Collider b, out CollisionInfo collision)
         {
             return collisionSystem.TryGetCollision(a, b, out collision);
+        }
+
+        private void IntegrateForces(fix deltaTime)
+        {
+            for (int i = 0; i < rigidIds.Count; i++)
+            {
+                ulong rigidId = rigidIds[i];
+                if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+                {
+                    continue;
+                }
+
+                if (!rigid.IsDynamic || rigid.inverseMass == fix.Zero)
+                {
+                    rigid.ClearForces();
+                    rigids[rigidId] = rigid;
+                    continue;
+                }
+
+                fix3 acceleration = rigid.acceleration + rigid.force * rigid.inverseMass;
+                if (rigid.useGravity && settings.enableGravity)
+                {
+                    acceleration += new fix3(fix.Zero, settings.gravity, fix.Zero);
+                }
+
+                rigid.velocity += acceleration * deltaTime;
+                rigid.ClearForces();
+                rigids[rigidId] = rigid;
+            }
+        }
+
+        private void IntegrateTransforms(fix deltaTime)
+        {
+            for (int i = 0; i < rigidIds.Count; i++)
+            {
+                ulong rigidId = rigidIds[i];
+                if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+                {
+                    continue;
+                }
+
+                if (!rigid.IsDynamic && !rigid.IsKinematic)
+                {
+                    continue;
+                }
+
+                if (!entities.TryGetValue(rigidId, out Entity entity))
+                {
+                    continue;
+                }
+
+                entity.translation += rigid.velocity * deltaTime;
+                entities[rigidId] = entity;
+            }
+        }
+
+        private void ResolveContacts()
+        {
+            IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
+            for (int i = 0; i < manifolds.Count; i++)
+            {
+                ContactManifold manifold = manifolds[i];
+                for (int j = 0; j < manifold.contactCount; j++)
+                {
+                    ResolveContactVelocity(manifold);
+                }
+            }
+        }
+
+        private void ResolveContactVelocity(ContactManifold manifold)
+        {
+            bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+            bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+            if (!hasRigid0 && !hasRigid1)
+            {
+                return;
+            }
+
+            fix inverseMassSum = inverseMass0 + inverseMass1;
+            if (inverseMassSum <= fix.Zero)
+            {
+                return;
+            }
+
+            fix3 relativeVelocity = rigid1.velocity - rigid0.velocity;
+            fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
+            if (normalVelocity > fix.Zero)
+            {
+                return;
+            }
+
+            fix impulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / inverseMassSum / manifold.contactCount;
+            fix3 impulse = manifold.normal * impulseMagnitude;
+
+            if (inverseMass0 > fix.Zero)
+            {
+                rigid0.velocity -= impulse * inverseMass0;
+                rigids[rigid0.id] = rigid0;
+            }
+
+            if (inverseMass1 > fix.Zero)
+            {
+                rigid1.velocity += impulse * inverseMass1;
+                rigids[rigid1.id] = rigid1;
+            }
+        }
+
+        private void CorrectPositions()
+        {
+            IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
+            for (int i = 0; i < manifolds.Count; i++)
+            {
+                ContactManifold manifold = manifolds[i];
+                bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+                bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+                if (!hasRigid0 && !hasRigid1)
+                {
+                    continue;
+                }
+
+                fix inverseMassSum = inverseMass0 + inverseMass1;
+                if (inverseMassSum <= fix.Zero)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < manifold.contactCount; j++)
+                {
+                    ContactPoint point = manifold[j];
+                    fix penetration = point.penetrationDepth - settings.penetrationSlop;
+                    if (penetration <= fix.Zero)
+                    {
+                        continue;
+                    }
+
+                    fix3 correction = manifold.normal * (penetration * settings.positionCorrectionPercent / inverseMassSum);
+                    if (inverseMass0 > fix.Zero)
+                    {
+                        TranslateEntity(rigid0.id, -correction * inverseMass0);
+                    }
+
+                    if (inverseMass1 > fix.Zero)
+                    {
+                        TranslateEntity(rigid1.id, correction * inverseMass1);
+                    }
+                }
+            }
+        }
+
+        private bool TryGetRigidMassData(ulong rigidId, out Rigid rigid, out fix inverseMass)
+        {
+            if (rigids.TryGetValue(rigidId, out rigid))
+            {
+                inverseMass = rigid.inverseMass;
+                return true;
+            }
+
+            rigid = default;
+            inverseMass = fix.Zero;
+            return false;
+        }
+
+        private void TranslateEntity(ulong entityId, fix3 delta)
+        {
+            if (!entities.TryGetValue(entityId, out Entity entity))
+            {
+                return;
+            }
+
+            entity.translation += delta;
+            entities[entityId] = entity;
         }
 
         private Collider RegisterCollider(Collider collider)

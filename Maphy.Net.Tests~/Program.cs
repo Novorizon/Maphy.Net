@@ -20,6 +20,9 @@ internal static class Program
         Run("sphere AABB contact reports penetration", TestSphereAABBContact);
         Run("world update syncs collider transform", TestWorldTransformSync);
         Run("world builds contact manifolds", TestWorldContactManifolds);
+        Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
+        Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
+        Run("world applies position correction", TestWorldAppliesPositionCorrection);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -114,7 +117,7 @@ internal static class Program
 
     private static void TestWorldTransformSync()
     {
-        World world = new World();
+        World world = new World(new WorldSettings(false));
         Rigid rigid = world.CreateRigid(new fix3(10, 0, 0), quaternion.identity);
         Collider collider = world.AddSphereCollider(rigid.id, new fix3(1, 0, 0), fix.One);
 
@@ -127,7 +130,7 @@ internal static class Program
 
     private static void TestWorldContactManifolds()
     {
-        World world = new World();
+        World world = new World(new WorldSettings(false));
         Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
         Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
         Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
@@ -151,6 +154,59 @@ internal static class Program
         world.Update();
 
         AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestWorldIntegratesLinearVelocity()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetVelocity(rigid.id, new fix3(2, 0, 0));
+        world.Update(fix._0_5);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "entity should exist");
+        AssertEqual(new fix3(1, 0, 0), entity.translation);
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        AssertEqual(new fix3(2, 0, 0), syncedRigid.velocity);
+    }
+
+    private static void TestWorldResolvesCollisionImpulse()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        world.SetVelocity(rigid0.id, fix3.right);
+        world.SetVelocity(rigid1.id, fix3.left);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(rigid0.id, out Rigid synced0), "first rigid should exist");
+        AssertTrue(world.TryGetRigid(rigid1.id, out Rigid synced1), "second rigid should exist");
+        AssertEqual(fix3.zero, synced0.velocity);
+        AssertEqual(fix3.zero, synced1.velocity);
+    }
+
+    private static void TestWorldAppliesPositionCorrection()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.One;
+        settings.penetrationSlop = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second entity should exist");
+        AssertEqual(new fix3(-fix._0_25, fix.Zero, fix.Zero), entity0.translation);
+        AssertEqual(new fix3(fix._1_5 + fix._0_25, fix.Zero, fix.Zero), entity1.translation);
     }
 
     private static void Run(string name, Action test)

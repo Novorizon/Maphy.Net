@@ -6,6 +6,10 @@ namespace Maphy.Physics
     {
         public bool enableGravity;
         public fix gravity;
+        public fix timeStep;
+        public fix restitution;
+        public fix penetrationSlop;
+        public fix positionCorrectionPercent;
 
         public static WorldSettings Default => new WorldSettings(true, -9.8f);
 
@@ -18,6 +22,10 @@ namespace Maphy.Physics
         {
             this.enableGravity = enableGravity;
             this.gravity = gravity;
+            timeStep = fix.One / 60;
+            restitution = fix.Zero;
+            penetrationSlop = fix._0_01;
+            positionCorrectionPercent = fix._0_2;
         }
     }
 }

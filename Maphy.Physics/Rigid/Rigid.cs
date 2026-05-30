@@ -20,6 +20,11 @@ namespace Maphy.Physics
         public fix mass;
         public bool useGravity;
 
+        public bool IsDynamic => type == RigidType.Dynamic;
+        public bool IsKinematic => type == RigidType.Kinematic;
+        public bool IsStatic => type == RigidType.Static;
+        public fix inverseMass => IsDynamic && mass > fix.Zero ? fix.One / mass : fix.Zero;
+
         public delegate void CollisionCallback(CollisionInfo collision);
         public event CollisionCallback OnCollision;
 
@@ -31,6 +36,16 @@ namespace Maphy.Physics
         public void SetCollider(ulong colliderId)
         {
             this.colliderId = colliderId;
+        }
+
+        public void AddForce(fix3 force)
+        {
+            this.force += force;
+        }
+
+        public void ClearForces()
+        {
+            force = fix3.zero;
         }
     }
 }
