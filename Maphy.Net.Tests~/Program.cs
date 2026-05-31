@@ -33,11 +33,17 @@ internal static class Program
         Run("contact solver preserves warm start impulses", TestContactSolverPreservesWarmStartImpulses);
         Run("box face contact builds multi point manifold", TestBoxFaceContactBuildsMultiPointManifold);
         Run("OBB contact uses oriented SAT normal", TestOBBContactUsesOrientedSATNormal);
+        Run("capsule OBB contact uses segment box distance", TestCapsuleOBBContactUsesSegmentBoxDistance);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
         Run("world dispatches collision callbacks", TestWorldDispatchesCollisionCallbacks);
         Run("trigger reports contact without solver response", TestTriggerReportsContactWithoutSolverResponse);
+        Run("collision events report enter stay exit", TestCollisionEventsReportEnterStayExit);
+        Run("trigger events report enter stay exit", TestTriggerEventsReportEnterStayExit);
+        Run("disabled and removed objects clear collision state", TestDisabledAndRemovedObjectsClearCollisionState);
+        Run("disabled rigid clears collision state", TestDisabledRigidClearsCollisionState);
+        Run("removing rigid removes colliders and collision state", TestRemovingRigidRemovesCollidersAndCollisionState);
         Run("static rigid ignores motion and forces", TestStaticRigidIgnoresMotionAndForces);
         Run("dynamic body resolves against static body", TestDynamicBodyResolvesAgainstStaticBody);
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
@@ -392,6 +398,20 @@ internal static class Program
         AssertTrue(math.abs(collision.penetrationDepth - fix._0_5) <= fix._0_0001, "rotated box penetration should be close to expected overlap");
     }
 
+    private static void TestCapsuleOBBContactUsesSegmentBoxDistance()
+    {
+        quaternion rotation = quaternion.RotateZ(math.PI * fix._0_25);
+        fix3 boxNormal = rotation * fix3.right;
+        OBB obb = new OBB(fix3.zero, new fix3(2, 2, 2), rotation);
+        Capsule capsule = new Capsule(boxNormal * (fix._1_5 - fix._0_1), fix._0_5, 4, rotation, fix3.up);
+
+        AssertTrue(PhysicsApi.Overlaps(capsule, obb), "capsule parallel to OBB face should overlap");
+        AssertTrue(PhysicsApi.TryComputeContact(capsule, obb, out CollisionInfo collision), "capsule OBB pair should produce contact");
+        AssertNear(-boxNormal, collision.normal, fix._0_01);
+        AssertEqual(1, collision.contactCount);
+        AssertTrue(math.abs(collision.penetrationDepth - fix._0_1) <= fix._0_01, "capsule OBB penetration should come from segment box distance");
+    }
+
     private static void TestWorldContactManifolds()
     {
         World world = new World(new WorldSettings(false));
@@ -571,6 +591,197 @@ internal static class Program
         AssertEqual(new fix3(fix._1_5, fix.Zero, fix.Zero), entity1.translation);
         AssertTrue(collider0.isTrigger == false, "first collider should not be trigger");
         AssertTrue(collider1.isTrigger, "second collider should be trigger");
+    }
+
+    private static void TestCollisionEventsReportEnterStayExit()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int legacyCount = 0;
+        int enterCount = 0;
+        int stayCount = 0;
+        int exitCount = 0;
+        int rigidEnterCount = 0;
+        int rigidStayCount = 0;
+        int rigidExitCount = 0;
+
+        collider0.OnCollision += collision => legacyCount++;
+        collider0.OnCollisionEnter += collision => enterCount++;
+        collider0.OnCollisionStay += collision => stayCount++;
+        collider0.OnCollisionExit += collision => exitCount++;
+        rigid0.OnCollisionEnter += collision => rigidEnterCount++;
+        rigid0.OnCollisionStay += collision => rigidStayCount++;
+        rigid0.OnCollisionExit += collision => rigidExitCount++;
+
+        world.Update(fix.Zero);
+        world.Update(fix.Zero);
+        world.SetTranslation(rigid1.id, new fix3(4, 0, 0));
+        world.Update(fix.Zero);
+
+        AssertEqual(2, legacyCount);
+        AssertEqual(1, enterCount);
+        AssertEqual(1, stayCount);
+        AssertEqual(1, exitCount);
+        AssertEqual(1, rigidEnterCount);
+        AssertEqual(1, rigidStayCount);
+        AssertEqual(1, rigidExitCount);
+        AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestTriggerEventsReportEnterStayExit()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int legacyCount = 0;
+        int enterCount = 0;
+        int stayCount = 0;
+        int exitCount = 0;
+
+        world.SetColliderTrigger(collider1.id, true);
+        collider0.OnCollision += collision => legacyCount++;
+        collider0.OnTriggerEnter += collision => enterCount++;
+        collider0.OnTriggerStay += collision => stayCount++;
+        collider0.OnTriggerExit += collision => exitCount++;
+
+        world.Update(fix.Zero);
+        world.Update(fix.Zero);
+        world.SetTranslation(rigid1.id, new fix3(4, 0, 0));
+        world.Update(fix.Zero);
+
+        AssertEqual(2, legacyCount);
+        AssertEqual(1, enterCount);
+        AssertEqual(1, stayCount);
+        AssertEqual(1, exitCount);
+        AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestDisabledAndRemovedObjectsClearCollisionState()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        List<Collider> results = new List<Collider>();
+        int enterCount = 0;
+        int exitCount = 0;
+
+        collider0.OnCollisionEnter += collision => enterCount++;
+        collider0.OnCollisionExit += collision => exitCount++;
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, enterCount);
+        AssertEqual(1, world.BroadphasePairs.Count);
+        AssertEqual(1, world.ContactManifolds.Count);
+
+        AssertTrue(world.SetColliderEnabled(collider1.id, false), "collider disable should succeed");
+
+        AssertEqual(1, exitCount);
+        AssertEqual(0, world.ContactManifolds.Count);
+        world.QueryAABB(new AABB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(4, 4, 4)), results);
+        AssertFalse(ContainsCollider(results, collider1.id), "disabled collider should be excluded from queries");
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, exitCount);
+        AssertEqual(0, world.BroadphasePairs.Count);
+        AssertEqual(0, world.ContactManifolds.Count);
+
+        AssertTrue(world.SetColliderEnabled(collider1.id, true), "collider enable should succeed");
+        world.Update(fix.Zero);
+
+        AssertEqual(2, enterCount);
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.RemoveCollider(collider1.id), "collider removal should succeed");
+        AssertEqual(2, exitCount);
+        AssertFalse(world.TryGetCollider(collider1.id, out Collider _), "removed collider should not be registered");
+        AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestDisabledRigidClearsCollisionState()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        List<Collider> results = new List<Collider>();
+        int enterCount = 0;
+        int exitCount = 0;
+
+        collider0.OnCollisionEnter += collision => enterCount++;
+        collider0.OnCollisionExit += collision => exitCount++;
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, enterCount);
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.SetRigidEnabled(rigid1.id, false), "rigid disable should succeed");
+
+        AssertEqual(1, exitCount);
+        AssertEqual(0, world.ContactManifolds.Count);
+        world.QueryAABB(new AABB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(4, 4, 4)), results);
+        AssertFalse(ContainsCollider(results, collider1.id), "disabled rigid collider should be excluded from queries");
+
+        world.Update(fix.Zero);
+
+        AssertEqual(0, world.BroadphasePairs.Count);
+        AssertEqual(0, world.ContactManifolds.Count);
+        AssertEqual(1, exitCount);
+
+        AssertTrue(world.SetRigidEnabled(rigid1.id, true), "rigid enable should succeed");
+        world.Update(fix.Zero);
+
+        AssertEqual(2, enterCount);
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.TryGetCollider(collider1.id, out Collider _), "enabled rigid collider should remain registered");
+    }
+
+    private static void TestRemovingRigidRemovesCollidersAndCollisionState()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int exitCount = 0;
+
+        collider0.OnCollisionExit += collision => exitCount++;
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.RemoveRigid(rigid1.id), "rigid removal should succeed");
+
+        AssertEqual(1, exitCount);
+        AssertFalse(world.TryGetRigid(rigid1.id, out Rigid _), "removed rigid should not be registered");
+        AssertFalse(world.TryGetEntity(rigid1.id, out Entity _), "removed rigid entity should not be registered");
+        AssertFalse(world.TryGetCollider(collider1.id, out Collider _), "removed rigid collider should not be registered");
+        AssertEqual(1, world.Colliders.Count);
+        AssertTrue(world.TryGetCollider(collider0.id, out Collider _), "unrelated collider should stay registered");
+        AssertEqual(0, world.ContactManifolds.Count);
+
+        world.Update(fix.Zero);
+
+        AssertEqual(0, world.BroadphasePairs.Count);
+        AssertEqual(0, world.ContactManifolds.Count);
+        AssertEqual(1, exitCount);
     }
 
     private static void TestStaticRigidIgnoresMotionAndForces()

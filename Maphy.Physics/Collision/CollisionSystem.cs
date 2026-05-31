@@ -20,6 +20,14 @@ namespace Maphy.Physics
             contactCache.Update(narrowphase.CollisionPairs);
         }
 
+        public bool RemoveCollider(ulong colliderId)
+        {
+            bool removed = broadphase.RemoveCollider(colliderId);
+            removed |= narrowphase.RemoveCollider(colliderId);
+            removed |= contactCache.RemoveCollider(colliderId);
+            return removed;
+        }
+
         public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, List<Collider> results)
         {
             broadphase.QueryAABB(colliders, bounds, results);

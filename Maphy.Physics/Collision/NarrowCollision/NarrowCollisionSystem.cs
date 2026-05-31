@@ -47,6 +47,11 @@ namespace Maphy.Physics
             return collisionPairs;
         }
 
+        public bool RemoveCollider(ulong colliderId)
+        {
+            return collisionPairs.RemoveAll(pair => pair.colliderId0 == colliderId || pair.colliderId1 == colliderId) > 0;
+        }
+
         public static bool Test(Shape shape0, Shape shape1)
         {
             return Physics.Overlaps(shape0, shape1);

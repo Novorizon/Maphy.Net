@@ -256,52 +256,8 @@ namespace Maphy.Physics
 
         private static fix SegmentAABBDistanceSq(fix3 segment0, fix3 segment1, fix3 extents)
         {
-            if (IsSegmentOverlapAABB(segment0, segment1, extents))
-            {
-                return fix.Zero;
-            }
-
-            fix minDistanceSq = math.min(PointAABBDistanceSq(segment0, extents), PointAABBDistanceSq(segment1, extents));
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, -extents.y, -extents.z), new fix3(extents.x, -extents.y, -extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, extents.y, -extents.z), new fix3(extents.x, extents.y, -extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, -extents.y, extents.z), new fix3(extents.x, -extents.y, extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, extents.y, extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq);
-
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, -extents.y, -extents.z), new fix3(-extents.x, extents.y, -extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(extents.x, -extents.y, -extents.z), new fix3(extents.x, extents.y, -extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, -extents.y, extents.z), new fix3(-extents.x, extents.y, extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(extents.x, -extents.y, extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq);
-
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, -extents.y, -extents.z), new fix3(-extents.x, -extents.y, extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(extents.x, -extents.y, -extents.z), new fix3(extents.x, -extents.y, extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(-extents.x, extents.y, -extents.z), new fix3(-extents.x, extents.y, extents.z), ref minDistanceSq);
-            CheckSegmentAABBEdgeDistance(segment0, segment1, extents, new fix3(extents.x, extents.y, -extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq);
-
-            return minDistanceSq;
-        }
-
-        private static void CheckSegmentAABBEdgeDistance(fix3 segment0, fix3 segment1, fix3 extents, fix3 edge0, fix3 edge1, ref fix minDistanceSq)
-        {
-            GetClosestPointsBetweenSegments(segment0, segment1, edge0, edge1, out fix3 closestSegment, out fix3 closestEdge);
-            fix distanceSq = math.distancesq(closestSegment, closestEdge);
-            minDistanceSq = math.min(minDistanceSq, distanceSq);
-        }
-
-        private static fix PointAABBDistanceSq(fix3 point, fix3 extents)
-        {
-            fix3 closest = math.clamp(point, -extents, extents);
-            return math.distancesq(point, closest);
-        }
-
-        private static bool IsSegmentOverlapAABB(fix3 segment0, fix3 segment1, fix3 extents)
-        {
-            fix3 direction = segment1 - segment0;
-            fix tMin = fix.Zero;
-            fix tMax = fix.One;
-
-            return IsSegmentOverlapAABBSlab(segment0.x, direction.x, -extents.x, extents.x, ref tMin, ref tMax)
-                && IsSegmentOverlapAABBSlab(segment0.y, direction.y, -extents.y, extents.y, ref tMin, ref tMax)
-                && IsSegmentOverlapAABBSlab(segment0.z, direction.z, -extents.z, extents.z, ref tMin, ref tMax);
+            GetClosestPointsBetweenSegmentAndAABB(segment0, segment1, extents, out fix3 closestSegment, out fix3 closestBox);
+            return math.distancesq(closestSegment, closestBox);
         }
 
         private static bool IsSegmentOverlapAABBSlab(fix origin, fix direction, fix min, fix max, ref fix tMin, ref fix tMax)

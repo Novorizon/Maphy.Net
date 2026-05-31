@@ -54,6 +54,14 @@ namespace Maphy.Physics
 
                     collision = collision.Flipped();
                     return true;
+                case (ShapeType.AABB, ShapeType.Capsule):
+                    return TryComputeCapsuleBoxContact((Capsule)shape1, BoxData.FromAABB((AABB)shape0), false, out collision);
+                case (ShapeType.Capsule, ShapeType.AABB):
+                    return TryComputeCapsuleBoxContact((Capsule)shape0, BoxData.FromAABB((AABB)shape1), true, out collision);
+                case (ShapeType.OBB, ShapeType.Capsule):
+                    return TryComputeCapsuleBoxContact((Capsule)shape1, BoxData.FromOBB((OBB)shape0), false, out collision);
+                case (ShapeType.Capsule, ShapeType.OBB):
+                    return TryComputeCapsuleBoxContact((Capsule)shape0, BoxData.FromOBB((OBB)shape1), true, out collision);
                 case (ShapeType.Capsule, ShapeType.Capsule):
                     return TryComputeCapsuleCapsuleContact((Capsule)shape0, (Capsule)shape1, out collision);
                 default:
@@ -392,6 +400,57 @@ namespace Maphy.Physics
             return true;
         }
 
+        private static bool TryComputeCapsuleBoxContact(Capsule capsule, BoxData box, bool capsuleIsShape0, out CollisionInfo collision)
+        {
+            fix3 localSegment0 = box.WorldToLocalPoint(capsule.Center1);
+            fix3 localSegment1 = box.WorldToLocalPoint(capsule.Center2);
+            GetClosestPointsBetweenSegmentAndAABB(localSegment0, localSegment1, box.extents, out fix3 localCapsulePoint, out fix3 localBoxPoint);
+
+            fix3 delta = localBoxPoint - localCapsulePoint;
+            fix distanceSq = math.lengthsq(delta);
+            if (distanceSq > capsule.Radius2)
+            {
+                collision = default;
+                return false;
+            }
+
+            fix3 normalLocal;
+            fix penetrationDepth;
+            if (distanceSq > math.Epsilon)
+            {
+                fix distance = math.sqrt(distanceSq);
+                normalLocal = delta / distance;
+                penetrationDepth = capsule.Radius - distance;
+            }
+            else
+            {
+                localBoxPoint = GetClosestPointOnBoxSurface(localCapsulePoint, box.extents, out normalLocal);
+                penetrationDepth = capsule.Radius + math.length(localBoxPoint - localCapsulePoint);
+            }
+
+            fix3 normalWorld = NormalizeOrDefault(box.LocalToWorldDirection(normalLocal));
+            fix3 capsuleAxisPoint = box.LocalToWorldPoint(localCapsulePoint);
+            fix3 pointOnCapsule = capsuleAxisPoint + normalWorld * capsule.Radius;
+            fix3 pointOnBox = box.LocalToWorldPoint(localBoxPoint);
+
+            collision = new CollisionInfo(0, 0)
+            {
+                penetrationDepth = penetrationDepth,
+                normal = capsuleIsShape0 ? normalWorld : -normalWorld,
+            };
+
+            if (capsuleIsShape0)
+            {
+                collision.AddContact(pointOnCapsule, pointOnBox, penetrationDepth);
+            }
+            else
+            {
+                collision.AddContact(pointOnBox, pointOnCapsule, penetrationDepth);
+            }
+
+            return true;
+        }
+
         private static bool TryComputeCapsuleCapsuleContact(Capsule a, Capsule b, out CollisionInfo collision)
         {
             GetClosestPointsBetweenSegments(
@@ -596,6 +655,176 @@ namespace Maphy.Physics
             return new fix3(localPoint.x, localPoint.y, normal.z * extents.z);
         }
 
+        private static void GetClosestPointsBetweenSegmentAndAABB(
+            fix3 segment0,
+            fix3 segment1,
+            fix3 extents,
+            out fix3 closestSegment,
+            out fix3 closestBox)
+        {
+            if (TryGetSegmentAABBOverlapInterval(segment0, segment1, extents, out fix tMin, out fix tMax))
+            {
+                fix t = (tMin + tMax) * fix._0_5;
+                closestSegment = segment0 + (segment1 - segment0) * t;
+                closestBox = math.clamp(closestSegment, -extents, extents);
+                return;
+            }
+
+            fix minDistanceSq = fix.Max;
+            closestSegment = segment0;
+            closestBox = math.clamp(segment0, -extents, extents);
+
+            CheckSegmentAABBPointClosest(segment0, extents, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBPointClosest(segment1, extents, ref minDistanceSq, ref closestSegment, ref closestBox);
+
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 0, -extents.x, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 0, extents.x, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 1, -extents.y, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 1, extents.y, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 2, -extents.z, ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBFaceClosest(segment0, segment1, extents, 2, extents.z, ref minDistanceSq, ref closestSegment, ref closestBox);
+
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, -extents.y, -extents.z), new fix3(extents.x, -extents.y, -extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, extents.y, -extents.z), new fix3(extents.x, extents.y, -extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, -extents.y, extents.z), new fix3(extents.x, -extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, extents.y, extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, -extents.y, -extents.z), new fix3(-extents.x, extents.y, -extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(extents.x, -extents.y, -extents.z), new fix3(extents.x, extents.y, -extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, -extents.y, extents.z), new fix3(-extents.x, extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(extents.x, -extents.y, extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, -extents.y, -extents.z), new fix3(-extents.x, -extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(extents.x, -extents.y, -extents.z), new fix3(extents.x, -extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(-extents.x, extents.y, -extents.z), new fix3(-extents.x, extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+            CheckSegmentAABBEdgeClosest(segment0, segment1, new fix3(extents.x, extents.y, -extents.z), new fix3(extents.x, extents.y, extents.z), ref minDistanceSq, ref closestSegment, ref closestBox);
+        }
+
+        private static bool TryGetSegmentAABBOverlapInterval(fix3 segment0, fix3 segment1, fix3 extents, out fix tMin, out fix tMax)
+        {
+            fix3 direction = segment1 - segment0;
+            tMin = fix.Zero;
+            tMax = fix.One;
+
+            return IsSegmentOverlapAABBSlab(segment0.x, direction.x, -extents.x, extents.x, ref tMin, ref tMax)
+                && IsSegmentOverlapAABBSlab(segment0.y, direction.y, -extents.y, extents.y, ref tMin, ref tMax)
+                && IsSegmentOverlapAABBSlab(segment0.z, direction.z, -extents.z, extents.z, ref tMin, ref tMax);
+        }
+
+        private static void CheckSegmentAABBPointClosest(
+            fix3 point,
+            fix3 extents,
+            ref fix minDistanceSq,
+            ref fix3 closestSegment,
+            ref fix3 closestBox)
+        {
+            fix3 boxPoint = math.clamp(point, -extents, extents);
+            UpdateClosestSegmentBoxPoints(point, boxPoint, ref minDistanceSq, ref closestSegment, ref closestBox);
+        }
+
+        private static void CheckSegmentAABBFaceClosest(
+            fix3 segment0,
+            fix3 segment1,
+            fix3 extents,
+            int axis,
+            fix faceCoordinate,
+            ref fix minDistanceSq,
+            ref fix3 closestSegment,
+            ref fix3 closestBox)
+        {
+            fix3 direction = segment1 - segment0;
+            int tangent0 = (axis + 1) % 3;
+            int tangent1 = (axis + 2) % 3;
+            fix tMin = fix.Zero;
+            fix tMax = fix.One;
+
+            if (!ClipSegmentAxisToRange(segment0, direction, tangent0, -GetComponent(extents, tangent0), GetComponent(extents, tangent0), ref tMin, ref tMax)
+                || !ClipSegmentAxisToRange(segment0, direction, tangent1, -GetComponent(extents, tangent1), GetComponent(extents, tangent1), ref tMin, ref tMax))
+            {
+                return;
+            }
+
+            fix axisDirection = GetComponent(direction, axis);
+            fix t = (tMin + tMax) * fix._0_5;
+            if (math.abs(axisDirection) > math.Epsilon)
+            {
+                t = math.clamp((faceCoordinate - GetComponent(segment0, axis)) / axisDirection, tMin, tMax);
+            }
+
+            fix3 segmentPoint = segment0 + direction * t;
+            fix3 boxPoint = segmentPoint;
+            boxPoint = SetComponent(boxPoint, axis, faceCoordinate);
+            boxPoint = SetComponent(boxPoint, tangent0, math.clamp(GetComponent(boxPoint, tangent0), -GetComponent(extents, tangent0), GetComponent(extents, tangent0)));
+            boxPoint = SetComponent(boxPoint, tangent1, math.clamp(GetComponent(boxPoint, tangent1), -GetComponent(extents, tangent1), GetComponent(extents, tangent1)));
+
+            UpdateClosestSegmentBoxPoints(segmentPoint, boxPoint, ref minDistanceSq, ref closestSegment, ref closestBox);
+        }
+
+        private static bool ClipSegmentAxisToRange(fix3 segment0, fix3 direction, int axis, fix min, fix max, ref fix tMin, ref fix tMax)
+        {
+            return IsSegmentOverlapAABBSlab(GetComponent(segment0, axis), GetComponent(direction, axis), min, max, ref tMin, ref tMax);
+        }
+
+        private static void CheckSegmentAABBEdgeClosest(
+            fix3 segment0,
+            fix3 segment1,
+            fix3 edge0,
+            fix3 edge1,
+            ref fix minDistanceSq,
+            ref fix3 closestSegment,
+            ref fix3 closestBox)
+        {
+            GetClosestPointsBetweenSegments(segment0, segment1, edge0, edge1, out fix3 segmentPoint, out fix3 boxPoint);
+            UpdateClosestSegmentBoxPoints(segmentPoint, boxPoint, ref minDistanceSq, ref closestSegment, ref closestBox);
+        }
+
+        private static void UpdateClosestSegmentBoxPoints(
+            fix3 segmentPoint,
+            fix3 boxPoint,
+            ref fix minDistanceSq,
+            ref fix3 closestSegment,
+            ref fix3 closestBox)
+        {
+            fix distanceSq = math.distancesq(segmentPoint, boxPoint);
+            if (distanceSq < minDistanceSq)
+            {
+                minDistanceSq = distanceSq;
+                closestSegment = segmentPoint;
+                closestBox = boxPoint;
+            }
+        }
+
+        private static fix GetComponent(fix3 value, int axis)
+        {
+            switch (axis)
+            {
+                case 0:
+                    return value.x;
+                case 1:
+                    return value.y;
+                default:
+                    return value.z;
+            }
+        }
+
+        private static fix3 SetComponent(fix3 value, int axis, fix component)
+        {
+            switch (axis)
+            {
+                case 0:
+                    value.x = component;
+                    break;
+                case 1:
+                    value.y = component;
+                    break;
+                default:
+                    value.z = component;
+                    break;
+            }
+
+            return value;
+        }
+
         private readonly struct BoxData
         {
             public readonly fix3 center;
@@ -659,6 +888,22 @@ namespace Maphy.Physics
                 return extents.x * math.abs(math.dot(axis0, axis))
                     + extents.y * math.abs(math.dot(axis1, axis))
                     + extents.z * math.abs(math.dot(axis2, axis));
+            }
+
+            public fix3 WorldToLocalPoint(fix3 point)
+            {
+                fix3 delta = point - center;
+                return new fix3(math.dot(delta, axis0), math.dot(delta, axis1), math.dot(delta, axis2));
+            }
+
+            public fix3 LocalToWorldPoint(fix3 point)
+            {
+                return center + LocalToWorldDirection(point);
+            }
+
+            public fix3 LocalToWorldDirection(fix3 direction)
+            {
+                return axis0 * direction.x + axis1 * direction.y + axis2 * direction.z;
             }
         }
     }

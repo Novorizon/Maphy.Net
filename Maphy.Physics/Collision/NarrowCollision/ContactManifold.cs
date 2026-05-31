@@ -210,6 +210,28 @@ namespace Maphy.Physics
             frameIndex = 0;
         }
 
+        public bool RemoveCollider(ulong colliderId)
+        {
+            staleKeys.Clear();
+            foreach (KeyValuePair<BroadCollisionPairKey, ContactManifold> item in manifoldsByKey)
+            {
+                if (item.Value.colliderId0 == colliderId || item.Value.colliderId1 == colliderId)
+                {
+                    staleKeys.Add(item.Key);
+                }
+            }
+
+            for (int i = 0; i < staleKeys.Count; i++)
+            {
+                manifoldsByKey.Remove(staleKeys[i]);
+            }
+
+            bool removedActive = activeManifolds.RemoveAll(manifold => manifold.colliderId0 == colliderId || manifold.colliderId1 == colliderId) > 0;
+            bool removedCached = staleKeys.Count > 0;
+            staleKeys.Clear();
+            return removedActive || removedCached;
+        }
+
         public IReadOnlyList<ContactManifold> Update(IEnumerable<NarrowCollisionSystem.CollisionPair> collisionPairs)
         {
             frameIndex++;

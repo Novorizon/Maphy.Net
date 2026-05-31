@@ -37,6 +37,7 @@ namespace Maphy.Physics
         public fix3 contactPoint1;
         public fix3 contactPoint2;
         public bool hasContact;
+        public bool isTrigger;
         public int contactCount;
         private CollisionContact contact0;
         private CollisionContact contact1;
@@ -80,6 +81,7 @@ namespace Maphy.Physics
             contactPoint1 = fix3.zero;
             contactPoint2 = fix3.zero;
             hasContact = false;
+            isTrigger = false;
             contactCount = 0;
             contact0 = default;
             contact1 = default;
@@ -104,6 +106,7 @@ namespace Maphy.Physics
             this.contactPoint1 = contactPoint1;
             this.contactPoint2 = contactPoint2;
             hasContact = true;
+            isTrigger = false;
             contactCount = 1;
             contact0 = new CollisionContact(contactPoint1, contactPoint2, penetrationDepth);
             contact1 = default;
@@ -134,6 +137,7 @@ namespace Maphy.Physics
                 contactPoint1 = contactPoint2,
                 contactPoint2 = contactPoint1,
                 hasContact = hasContact,
+                isTrigger = isTrigger,
                 contactCount = contactCount,
                 contact0 = contact0.Flipped(),
                 contact1 = contact1.Flipped(),

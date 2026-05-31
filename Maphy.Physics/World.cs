@@ -12,6 +12,11 @@ namespace Maphy.Physics
         private readonly Dictionary<ulong, Collider> colliders = new Dictionary<ulong, Collider>();
         private readonly List<ulong> rigidIds = new List<ulong>();
         private readonly List<ulong> colliderIds = new List<ulong>();
+        private readonly List<Collider> activeColliders = new List<Collider>();
+        private readonly List<ulong> colliderRemovalBuffer = new List<ulong>();
+        private readonly List<BroadCollisionPairKey> collisionEventRemovalBuffer = new List<BroadCollisionPairKey>();
+        private readonly Dictionary<BroadCollisionPairKey, CollisionEventState> activeCollisionEvents = new Dictionary<BroadCollisionPairKey, CollisionEventState>();
+        private readonly Dictionary<BroadCollisionPairKey, CollisionEventState> nextCollisionEvents = new Dictionary<BroadCollisionPairKey, CollisionEventState>();
         private readonly CollisionSystem collisionSystem = new CollisionSystem();
 
         public IReadOnlyDictionary<ulong, Entity> Entities => entities;
@@ -47,7 +52,7 @@ namespace Maphy.Physics
             IntegrateForces(deltaTime);
             IntegrateTransforms(deltaTime);
             SyncColliders();
-            collisionSystem.Collision(colliders.Values);
+            collisionSystem.Collision(GetActiveColliders());
             ResolveContacts();
             CorrectPositions();
             SyncColliders();
@@ -74,6 +79,7 @@ namespace Maphy.Physics
                 inertia = fix3.one,
                 autoMass = true,
                 autoInertia = true,
+                enabled = true,
                 useGravity = settings.enableGravity,
             };
 
@@ -149,6 +155,31 @@ namespace Maphy.Physics
                 entities[rigidId] = entity;
             }
 
+            return true;
+        }
+
+        public bool SetRigidEnabled(ulong rigidId, bool enabled)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            if (rigid.enabled == enabled)
+            {
+                return true;
+            }
+
+            rigid.SetEnabled(enabled);
+            if (!enabled)
+            {
+                rigid.ClearForces();
+                rigid.ClearTorques();
+                EndCollisionEventsForRigid(rigidId);
+                RemoveRigidCollidersFromCollisionSystem(rigidId);
+            }
+
+            rigids[rigidId] = rigid;
             return true;
         }
 
@@ -262,6 +293,28 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetColliderEnabled(ulong colliderId, bool enabled)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            if (collider.enabled == enabled)
+            {
+                return true;
+            }
+
+            collider.SetEnabled(enabled);
+            if (!enabled)
+            {
+                EndCollisionEventsForCollider(colliderId);
+                collisionSystem.RemoveCollider(colliderId);
+            }
+
+            return true;
+        }
+
         public bool SetColliderMaterial(ulong colliderId, Material material)
         {
             if (!colliders.TryGetValue(colliderId, out Collider collider))
@@ -339,12 +392,35 @@ namespace Maphy.Physics
 
         public bool RemoveCollider(ulong colliderId)
         {
-            if (!colliders.Remove(colliderId))
+            return RemoveColliderInternal(colliderId, true);
+        }
+
+        public bool RemoveRigid(ulong rigidId)
+        {
+            if (!rigids.ContainsKey(rigidId))
             {
                 return false;
             }
 
-            colliderIds.Remove(colliderId);
+            colliderRemovalBuffer.Clear();
+            for (int i = 0; i < colliderIds.Count; i++)
+            {
+                ulong colliderId = colliderIds[i];
+                if (colliders.TryGetValue(colliderId, out Collider collider) && collider.rigidId == rigidId)
+                {
+                    colliderRemovalBuffer.Add(colliderId);
+                }
+            }
+
+            for (int i = 0; i < colliderRemovalBuffer.Count; i++)
+            {
+                RemoveColliderInternal(colliderRemovalBuffer[i], true);
+            }
+
+            colliderRemovalBuffer.Clear();
+            rigids.Remove(rigidId);
+            rigidIds.Remove(rigidId);
+            entities.Remove(rigidId);
             return true;
         }
 
@@ -366,7 +442,7 @@ namespace Maphy.Physics
         public void QueryAABB(AABB bounds, int layerMask, List<Collider> results)
         {
             SyncColliders();
-            collisionSystem.QueryAABB(colliders.Values, bounds, layerMask, results);
+            collisionSystem.QueryAABB(GetActiveColliders(), bounds, layerMask, results);
         }
 
         public bool Raycast(Ray ray, out RaycastHit hitInfo, fix maxDistance)
@@ -377,7 +453,7 @@ namespace Maphy.Physics
         public bool Raycast(Ray ray, out RaycastHit hitInfo, fix maxDistance, int layerMask)
         {
             SyncColliders();
-            return collisionSystem.Raycast(colliders.Values, ray, maxDistance, layerMask, out hitInfo);
+            return collisionSystem.Raycast(GetActiveColliders(), ray, maxDistance, layerMask, out hitInfo);
         }
 
         public bool Raycast(fix3 origin, fix3 direction, out RaycastHit hitInfo, fix maxDistance)
@@ -809,25 +885,230 @@ namespace Maphy.Physics
 
         private void DispatchCollisionCallbacks()
         {
+            nextCollisionEvents.Clear();
             IReadOnlyList<NarrowCollisionSystem.CollisionPair> pairs = collisionSystem.CollisionPairs;
             for (int i = 0; i < pairs.Count; i++)
             {
                 NarrowCollisionSystem.CollisionPair pair = pairs[i];
-                CollisionInfo collision0 = pair.collision;
-                CollisionInfo collision1 = collision0.Flipped();
+                bool isTrigger = pair.collider0.isTrigger || pair.collider1.isTrigger;
+                CollisionEventState state = CreateCollisionEventState(pair, isTrigger);
 
-                pair.collider0.collision = collision0;
-                pair.collider1.collision = collision1;
-
-                if (rigids.TryGetValue(pair.rigidId0, out Rigid rigid0))
+                if (activeCollisionEvents.TryGetValue(pair.key, out CollisionEventState previous))
                 {
-                    rigid0.Listener(collision0);
+                    if (previous.isTrigger != isTrigger)
+                    {
+                        DispatchCollisionEvent(previous, CollisionEventPhase.Exit);
+                        DispatchCollisionEvent(state, CollisionEventPhase.Enter);
+                    }
+                    else
+                    {
+                        DispatchCollisionEvent(state, CollisionEventPhase.Stay);
+                    }
+                }
+                else
+                {
+                    DispatchCollisionEvent(state, CollisionEventPhase.Enter);
                 }
 
-                if (rigids.TryGetValue(pair.rigidId1, out Rigid rigid1))
+                nextCollisionEvents[pair.key] = state;
+            }
+
+            foreach (KeyValuePair<BroadCollisionPairKey, CollisionEventState> item in activeCollisionEvents)
+            {
+                if (!nextCollisionEvents.ContainsKey(item.Key))
                 {
-                    rigid1.Listener(collision1);
+                    DispatchCollisionEvent(item.Value, CollisionEventPhase.Exit);
                 }
+            }
+
+            activeCollisionEvents.Clear();
+            foreach (KeyValuePair<BroadCollisionPairKey, CollisionEventState> item in nextCollisionEvents)
+            {
+                activeCollisionEvents.Add(item.Key, item.Value);
+            }
+
+            nextCollisionEvents.Clear();
+        }
+
+        private CollisionEventState CreateCollisionEventState(NarrowCollisionSystem.CollisionPair pair, bool isTrigger)
+        {
+            CollisionInfo collision = pair.collision;
+            collision.isTrigger = isTrigger;
+
+            rigids.TryGetValue(pair.rigidId0, out Rigid rigid0);
+            rigids.TryGetValue(pair.rigidId1, out Rigid rigid1);
+            return new CollisionEventState(pair.collider0, pair.collider1, rigid0, rigid1, collision, isTrigger);
+        }
+
+        private void DispatchCollisionEvent(CollisionEventState state, CollisionEventPhase phase)
+        {
+            CollisionInfo collision0 = state.collision;
+            collision0.isTrigger = state.isTrigger;
+            CollisionInfo collision1 = collision0.Flipped();
+
+            switch (phase)
+            {
+                case CollisionEventPhase.Enter:
+                    state.collider0?.DispatchCollisionEnter(collision0);
+                    state.collider1?.DispatchCollisionEnter(collision1);
+                    state.rigid0?.DispatchCollisionEnter(collision0);
+                    state.rigid1?.DispatchCollisionEnter(collision1);
+                    break;
+                case CollisionEventPhase.Stay:
+                    state.collider0?.DispatchCollisionStay(collision0);
+                    state.collider1?.DispatchCollisionStay(collision1);
+                    state.rigid0?.DispatchCollisionStay(collision0);
+                    state.rigid1?.DispatchCollisionStay(collision1);
+                    break;
+                case CollisionEventPhase.Exit:
+                    state.collider0?.DispatchCollisionExit(collision0);
+                    state.collider1?.DispatchCollisionExit(collision1);
+                    state.rigid0?.DispatchCollisionExit(collision0);
+                    state.rigid1?.DispatchCollisionExit(collision1);
+                    break;
+            }
+        }
+
+        private void EndCollisionEventsForCollider(ulong colliderId)
+        {
+            collisionEventRemovalBuffer.Clear();
+            foreach (KeyValuePair<BroadCollisionPairKey, CollisionEventState> item in activeCollisionEvents)
+            {
+                if (item.Value.ContainsCollider(colliderId))
+                {
+                    DispatchCollisionEvent(item.Value, CollisionEventPhase.Exit);
+                    collisionEventRemovalBuffer.Add(item.Key);
+                }
+            }
+
+            for (int i = 0; i < collisionEventRemovalBuffer.Count; i++)
+            {
+                activeCollisionEvents.Remove(collisionEventRemovalBuffer[i]);
+                nextCollisionEvents.Remove(collisionEventRemovalBuffer[i]);
+            }
+
+            collisionEventRemovalBuffer.Clear();
+        }
+
+        private void EndCollisionEventsForRigid(ulong rigidId)
+        {
+            collisionEventRemovalBuffer.Clear();
+            foreach (KeyValuePair<BroadCollisionPairKey, CollisionEventState> item in activeCollisionEvents)
+            {
+                if (item.Value.ContainsRigid(rigidId))
+                {
+                    DispatchCollisionEvent(item.Value, CollisionEventPhase.Exit);
+                    collisionEventRemovalBuffer.Add(item.Key);
+                }
+            }
+
+            for (int i = 0; i < collisionEventRemovalBuffer.Count; i++)
+            {
+                activeCollisionEvents.Remove(collisionEventRemovalBuffer[i]);
+                nextCollisionEvents.Remove(collisionEventRemovalBuffer[i]);
+            }
+
+            collisionEventRemovalBuffer.Clear();
+        }
+
+        private bool RemoveColliderInternal(ulong colliderId, bool dispatchExit)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            if (dispatchExit)
+            {
+                EndCollisionEventsForCollider(colliderId);
+            }
+
+            colliders.Remove(colliderId);
+            colliderIds.Remove(colliderId);
+            collisionSystem.RemoveCollider(colliderId);
+
+            if (rigids.TryGetValue(collider.rigidId, out Rigid rigid) && rigid.colliderId == colliderId)
+            {
+                rigid.SetCollider(0);
+                rigids[rigid.id] = rigid;
+            }
+
+            return true;
+        }
+
+        private void RemoveRigidCollidersFromCollisionSystem(ulong rigidId)
+        {
+            for (int i = 0; i < colliderIds.Count; i++)
+            {
+                ulong colliderId = colliderIds[i];
+                if (colliders.TryGetValue(colliderId, out Collider collider) && collider.rigidId == rigidId)
+                {
+                    collisionSystem.RemoveCollider(colliderId);
+                }
+            }
+        }
+
+        private IReadOnlyList<Collider> GetActiveColliders()
+        {
+            activeColliders.Clear();
+            for (int i = 0; i < colliderIds.Count; i++)
+            {
+                ulong colliderId = colliderIds[i];
+                if (colliders.TryGetValue(colliderId, out Collider collider) && IsColliderActive(collider))
+                {
+                    activeColliders.Add(collider);
+                }
+            }
+
+            return activeColliders;
+        }
+
+        private bool IsColliderActive(Collider collider)
+        {
+            if (collider == null || !collider.enabled || collider.shape == null)
+            {
+                return false;
+            }
+
+            return !rigids.TryGetValue(collider.rigidId, out Rigid rigid) || rigid.enabled;
+        }
+
+        private enum CollisionEventPhase
+        {
+            Enter,
+            Stay,
+            Exit
+        }
+
+        private readonly struct CollisionEventState
+        {
+            public readonly Collider collider0;
+            public readonly Collider collider1;
+            public readonly Rigid rigid0;
+            public readonly Rigid rigid1;
+            public readonly CollisionInfo collision;
+            public readonly bool isTrigger;
+
+            public CollisionEventState(Collider collider0, Collider collider1, Rigid rigid0, Rigid rigid1, CollisionInfo collision, bool isTrigger)
+            {
+                this.collider0 = collider0;
+                this.collider1 = collider1;
+                this.rigid0 = rigid0;
+                this.rigid1 = rigid1;
+                this.collision = collision;
+                this.isTrigger = isTrigger;
+            }
+
+            public bool ContainsCollider(ulong colliderId)
+            {
+                return (collider0 != null && collider0.id == colliderId)
+                    || (collider1 != null && collider1.id == colliderId);
+            }
+
+            public bool ContainsRigid(ulong rigidId)
+            {
+                return (rigid0 != null && rigid0.id == rigidId)
+                    || (rigid1 != null && rigid1.id == rigidId);
             }
         }
 

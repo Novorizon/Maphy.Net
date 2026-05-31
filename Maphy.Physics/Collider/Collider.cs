@@ -20,6 +20,7 @@ namespace Maphy.Physics
         public Shape shape { get; set; }
         public Material material { get; set; }
         public bool isTrigger { get; set; }
+        public bool enabled { get; private set; }
         private CollisionInfo collisionInfo { get; set; }
 
         public void AddAABBCollider(ulong rigidId, fix3 center, fix3 size)
@@ -31,6 +32,7 @@ namespace Maphy.Physics
             shape = new AABB(center, size);
             material = Material.Default;
             isTrigger = false;
+            enabled = true;
             layer = DefaultLayer;
             collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
@@ -45,6 +47,7 @@ namespace Maphy.Physics
             shape = new OBB(center, size, rotation);
             material = Material.Default;
             isTrigger = false;
+            enabled = true;
             layer = DefaultLayer;
             collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
@@ -59,6 +62,7 @@ namespace Maphy.Physics
             shape = new Sphere(center, radius);
             material = Material.Default;
             isTrigger = false;
+            enabled = true;
             layer = DefaultLayer;
             collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
@@ -73,6 +77,7 @@ namespace Maphy.Physics
             shape = new Capsule(center, radius, height, rotation, fix3.up);
             material = Material.Default;
             isTrigger = false;
+            enabled = true;
             layer = DefaultLayer;
             collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
@@ -113,14 +118,63 @@ namespace Maphy.Physics
             get { return collisionInfo; }
             set
             {
-                collisionInfo = value;
-                OnCollision?.Invoke(collisionInfo);
+                DispatchActiveCollision(value);
             }
+        }
+
+        internal void DispatchCollisionEnter(CollisionInfo collision)
+        {
+            DispatchActiveCollision(collision);
+            if (collision.isTrigger)
+            {
+                OnTriggerEnter?.Invoke(collision);
+            }
+            else
+            {
+                OnCollisionEnter?.Invoke(collision);
+            }
+        }
+
+        internal void DispatchCollisionStay(CollisionInfo collision)
+        {
+            DispatchActiveCollision(collision);
+            if (collision.isTrigger)
+            {
+                OnTriggerStay?.Invoke(collision);
+            }
+            else
+            {
+                OnCollisionStay?.Invoke(collision);
+            }
+        }
+
+        internal void DispatchCollisionExit(CollisionInfo collision)
+        {
+            collisionInfo = collision;
+            if (collision.isTrigger)
+            {
+                OnTriggerExit?.Invoke(collision);
+            }
+            else
+            {
+                OnCollisionExit?.Invoke(collision);
+            }
+        }
+
+        private void DispatchActiveCollision(CollisionInfo collision)
+        {
+            collisionInfo = collision;
+            OnCollision?.Invoke(collisionInfo);
         }
 
         public void SetTrigger(bool isTrigger)
         {
             this.isTrigger = isTrigger;
+        }
+
+        public void SetEnabled(bool enabled)
+        {
+            this.enabled = enabled;
         }
 
         public void SetMaterial(Material material)
@@ -152,6 +206,8 @@ namespace Maphy.Physics
         public bool CanCollideWith(Collider other)
         {
             return other != null
+                && enabled
+                && other.enabled
                 && IsLayerEnabled(collisionMask, other.layer)
                 && IsLayerEnabled(other.collisionMask, layer);
         }
@@ -168,5 +224,11 @@ namespace Maphy.Physics
 
         public delegate void CollisionCallback(CollisionInfo collision);
         public event CollisionCallback OnCollision;
+        public event CollisionCallback OnCollisionEnter;
+        public event CollisionCallback OnCollisionStay;
+        public event CollisionCallback OnCollisionExit;
+        public event CollisionCallback OnTriggerEnter;
+        public event CollisionCallback OnTriggerStay;
+        public event CollisionCallback OnTriggerExit;
     }
 }
