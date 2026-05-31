@@ -44,6 +44,9 @@ internal static class Program
         Run("disabled and removed objects clear collision state", TestDisabledAndRemovedObjectsClearCollisionState);
         Run("disabled rigid clears collision state", TestDisabledRigidClearsCollisionState);
         Run("removing rigid removes colliders and collision state", TestRemovingRigidRemovesCollidersAndCollisionState);
+        Run("distance constraint preserves rigid distance", TestDistanceConstraintPreservesRigidDistance);
+        Run("disabled rigid disables distance constraint", TestDisabledRigidDisablesDistanceConstraint);
+        Run("removing rigid removes constraints", TestRemovingRigidRemovesConstraints);
         Run("static rigid ignores motion and forces", TestStaticRigidIgnoresMotionAndForces);
         Run("dynamic body resolves against static body", TestDynamicBodyResolvesAgainstStaticBody);
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
@@ -782,6 +785,81 @@ internal static class Program
         AssertEqual(0, world.BroadphasePairs.Count);
         AssertEqual(0, world.ContactManifolds.Count);
         AssertEqual(1, exitCount);
+    }
+
+    private static void TestDistanceConstraintPreservesRigidDistance()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+        World autoDistanceWorld = new World(settings);
+        Rigid autoRigid0 = autoDistanceWorld.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid autoRigid1 = autoDistanceWorld.CreateRigid(new fix3(3, 0, 0), quaternion.identity);
+
+        DistanceConstraint constraint = world.CreateDistanceConstraint(rigid0.id, rigid1.id, new fix(2));
+        DistanceConstraint autoDistanceConstraint = autoDistanceWorld.CreateDistanceConstraint(autoRigid0.id, autoRigid1.id);
+
+        AssertTrue(constraint != null, "distance constraint should be created");
+        AssertTrue(autoDistanceConstraint != null, "auto distance constraint should be created");
+        AssertEqual(new fix(3), autoDistanceConstraint.distance);
+        AssertEqual(1, world.Constraints.Count);
+        AssertTrue(world.TryGetDistanceConstraint(constraint.id, out DistanceConstraint _), "distance constraint should be queryable");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first constrained entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second constrained entity should exist");
+        AssertTrue(math.abs(math.distance(entity0.translation, entity1.translation) - new fix(2)) <= fix._0_0001, "distance constraint should correct current distance");
+
+        world.SetVelocity(rigid0.id, fix3.left);
+        world.SetVelocity(rigid1.id, fix3.right);
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out entity0), "first constrained entity should still exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out entity1), "second constrained entity should still exist");
+        AssertTrue(math.abs(math.distance(entity0.translation, entity1.translation) - new fix(2)) <= fix._0_0001, "distance constraint should preserve distance after integration");
+    }
+
+    private static void TestDisabledRigidDisablesDistanceConstraint()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+        DistanceConstraint constraint = world.CreateDistanceConstraint(rigid0.id, rigid1.id, new fix(2));
+
+        AssertTrue(constraint != null, "distance constraint should be created");
+        AssertTrue(world.SetRigidEnabled(rigid1.id, false), "rigid disable should succeed");
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first constrained entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second constrained entity should exist");
+        AssertEqual(new fix(4), math.distance(entity0.translation, entity1.translation));
+
+        AssertTrue(world.SetRigidEnabled(rigid1.id, true), "rigid enable should succeed");
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out entity0), "first constrained entity should still exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out entity1), "second constrained entity should still exist");
+        AssertTrue(math.abs(math.distance(entity0.translation, entity1.translation) - new fix(2)) <= fix._0_0001, "re-enabled rigid should participate in constraint solving");
+    }
+
+    private static void TestRemovingRigidRemovesConstraints()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+        DistanceConstraint constraint = world.CreateDistanceConstraint(rigid0.id, rigid1.id, new fix(2));
+
+        AssertTrue(constraint != null, "distance constraint should be created");
+        AssertEqual(1, world.Constraints.Count);
+        AssertTrue(world.RemoveRigid(rigid1.id), "rigid removal should succeed");
+
+        AssertEqual(0, world.Constraints.Count);
+        AssertFalse(world.TryGetConstraint(constraint.id, out Constraint _), "constraint connected to removed rigid should be removed");
+        AssertTrue(world.TryGetRigid(rigid0.id, out Rigid _), "unrelated rigid should stay registered");
+        AssertFalse(world.TryGetRigid(rigid1.id, out Rigid _), "removed rigid should not be registered");
     }
 
     private static void TestStaticRigidIgnoresMotionAndForces()

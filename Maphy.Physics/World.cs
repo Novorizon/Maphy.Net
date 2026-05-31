@@ -6,14 +6,18 @@ namespace Maphy.Physics
     public class World
     {
         private ulong id = 10000000;
+        private ulong constraintId = 20000000;
         public WorldSettings settings;
         private readonly Dictionary<ulong, Entity> entities;
         private readonly Dictionary<ulong, Rigid> rigids = new Dictionary<ulong, Rigid>();
         private readonly Dictionary<ulong, Collider> colliders = new Dictionary<ulong, Collider>();
+        private readonly Dictionary<ulong, Constraint> constraints = new Dictionary<ulong, Constraint>();
         private readonly List<ulong> rigidIds = new List<ulong>();
         private readonly List<ulong> colliderIds = new List<ulong>();
+        private readonly List<ulong> constraintIds = new List<ulong>();
         private readonly List<Collider> activeColliders = new List<Collider>();
         private readonly List<ulong> colliderRemovalBuffer = new List<ulong>();
+        private readonly List<ulong> constraintRemovalBuffer = new List<ulong>();
         private readonly List<BroadCollisionPairKey> collisionEventRemovalBuffer = new List<BroadCollisionPairKey>();
         private readonly Dictionary<BroadCollisionPairKey, CollisionEventState> activeCollisionEvents = new Dictionary<BroadCollisionPairKey, CollisionEventState>();
         private readonly Dictionary<BroadCollisionPairKey, CollisionEventState> nextCollisionEvents = new Dictionary<BroadCollisionPairKey, CollisionEventState>();
@@ -22,6 +26,7 @@ namespace Maphy.Physics
         public IReadOnlyDictionary<ulong, Entity> Entities => entities;
         public IReadOnlyDictionary<ulong, Rigid> Rigids => rigids;
         public IReadOnlyDictionary<ulong, Collider> Colliders => colliders;
+        public IReadOnlyDictionary<ulong, Constraint> Constraints => constraints;
         public IReadOnlyList<BroadCollisionPair> BroadphasePairs => collisionSystem.BroadphasePairs;
         public IReadOnlyList<NarrowCollisionSystem.CollisionPair> CollisionPairs => collisionSystem.CollisionPairs;
         public IReadOnlyList<ContactManifold> ContactManifolds => collisionSystem.ContactManifolds;
@@ -55,6 +60,7 @@ namespace Maphy.Physics
             collisionSystem.Collision(GetActiveColliders());
             ResolveContacts();
             CorrectPositions();
+            CorrectConstraints();
             SyncColliders();
             DispatchCollisionCallbacks();
         }
@@ -101,6 +107,23 @@ namespace Maphy.Physics
         public bool TryGetCollider(ulong colliderId, out Collider collider)
         {
             return colliders.TryGetValue(colliderId, out collider);
+        }
+
+        public bool TryGetConstraint(ulong constraintId, out Constraint constraint)
+        {
+            return constraints.TryGetValue(constraintId, out constraint);
+        }
+
+        public bool TryGetDistanceConstraint(ulong constraintId, out DistanceConstraint constraint)
+        {
+            if (constraints.TryGetValue(constraintId, out Constraint stored) && stored is DistanceConstraint distanceConstraint)
+            {
+                constraint = distanceConstraint;
+                return true;
+            }
+
+            constraint = default;
+            return false;
         }
 
         public bool SetTransform(ulong entityId, fix3 translation, quaternion orientation)
@@ -177,6 +200,7 @@ namespace Maphy.Physics
                 rigid.ClearTorques();
                 EndCollisionEventsForRigid(rigidId);
                 RemoveRigidCollidersFromCollisionSystem(rigidId);
+                ClearConstraintWarmStartForRigid(rigidId);
             }
 
             rigids[rigidId] = rigid;
@@ -362,6 +386,64 @@ namespace Maphy.Physics
             return true;
         }
 
+        public DistanceConstraint CreateDistanceConstraint(ulong rigidId0, ulong rigidId1, fix distance)
+        {
+            return CreateDistanceConstraint(rigidId0, rigidId1, fix3.zero, fix3.zero, distance);
+        }
+
+        public DistanceConstraint CreateDistanceConstraint(ulong rigidId0, ulong rigidId1)
+        {
+            return CreateDistanceConstraint(rigidId0, rigidId1, fix3.zero, fix3.zero);
+        }
+
+        public DistanceConstraint CreateDistanceConstraint(ulong rigidId0, ulong rigidId1, fix3 localAnchor0, fix3 localAnchor1)
+        {
+            if (!TryComputeCurrentAnchorDistance(rigidId0, rigidId1, localAnchor0, localAnchor1, out fix distance))
+            {
+                return null;
+            }
+
+            return CreateDistanceConstraint(rigidId0, rigidId1, localAnchor0, localAnchor1, distance);
+        }
+
+        public DistanceConstraint CreateDistanceConstraint(ulong rigidId0, ulong rigidId1, fix3 localAnchor0, fix3 localAnchor1, fix distance)
+        {
+            if (rigidId0 == rigidId1 || !rigids.ContainsKey(rigidId0) || !rigids.ContainsKey(rigidId1))
+            {
+                return null;
+            }
+
+            DistanceConstraint constraint = new DistanceConstraint(rigidId0, rigidId1, localAnchor0, localAnchor1, distance)
+            {
+                id = constraintId++,
+            };
+            constraints.Add(constraint.id, constraint);
+            constraintIds.Add(constraint.id);
+            return constraint;
+        }
+
+        public bool SetConstraintEnabled(ulong constraintId, bool enabled)
+        {
+            if (!constraints.TryGetValue(constraintId, out Constraint constraint))
+            {
+                return false;
+            }
+
+            constraint.SetEnabled(enabled);
+            return true;
+        }
+
+        public bool RemoveConstraint(ulong constraintId)
+        {
+            if (!constraints.Remove(constraintId))
+            {
+                return false;
+            }
+
+            constraintIds.Remove(constraintId);
+            return true;
+        }
+
         public Collider AddAABBCollider(ulong rigidId, fix3 center, fix3 size)
         {
             Collider collider = new Collider();
@@ -418,6 +500,7 @@ namespace Maphy.Physics
             }
 
             colliderRemovalBuffer.Clear();
+            RemoveConstraintsForRigid(rigidId);
             rigids.Remove(rigidId);
             rigidIds.Remove(rigidId);
             entities.Remove(rigidId);
@@ -548,6 +631,7 @@ namespace Maphy.Physics
             int solverIterations = settings.solverIterations > 0 ? settings.solverIterations : 1;
             IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
             WarmStartContacts(manifolds);
+            WarmStartConstraints();
             for (int iteration = 0; iteration < solverIterations; iteration++)
             {
                 for (int i = 0; i < manifolds.Count; i++)
@@ -564,6 +648,8 @@ namespace Maphy.Physics
                         ResolveContactVelocity(manifold, ref point);
                     }
                 }
+
+                ResolveConstraintsVelocity();
             }
         }
 
@@ -610,6 +696,90 @@ namespace Maphy.Physics
                     ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
                 }
             }
+        }
+
+        private void WarmStartConstraints()
+        {
+            for (int i = 0; i < constraintIds.Count; i++)
+            {
+                ulong currentConstraintId = constraintIds[i];
+                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint)
+                    || constraint.accumulatedImpulse == fix.Zero)
+                {
+                    continue;
+                }
+
+                if (constraint is DistanceConstraint distanceConstraint
+                    && TryGetDistanceConstraintSolveData(distanceConstraint, out DistanceConstraintSolveData data))
+                {
+                    ApplyImpulse(
+                        true,
+                        data.rigid0,
+                        data.inverseMass0,
+                        data.relativeAnchor0,
+                        true,
+                        data.rigid1,
+                        data.inverseMass1,
+                        data.relativeAnchor1,
+                        data.axis * distanceConstraint.accumulatedImpulse);
+                }
+                else
+                {
+                    constraint.ClearWarmStart();
+                }
+            }
+        }
+
+        private void ResolveConstraintsVelocity()
+        {
+            for (int i = 0; i < constraintIds.Count; i++)
+            {
+                ulong currentConstraintId = constraintIds[i];
+                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint))
+                {
+                    continue;
+                }
+
+                if (constraint is DistanceConstraint distanceConstraint)
+                {
+                    ResolveDistanceConstraintVelocity(distanceConstraint);
+                }
+            }
+        }
+
+        private void ResolveDistanceConstraintVelocity(DistanceConstraint constraint)
+        {
+            if (!TryGetDistanceConstraintSolveData(constraint, out DistanceConstraintSolveData data))
+            {
+                constraint.ClearWarmStart();
+                return;
+            }
+
+            fix effectiveMass = data.inverseMass0 + data.inverseMass1
+                + GetAngularEffectiveMass(data.rigid0, data.relativeAnchor0, data.axis)
+                + GetAngularEffectiveMass(data.rigid1, data.relativeAnchor1, data.axis);
+            if (effectiveMass <= fix.Zero)
+            {
+                constraint.ClearWarmStart();
+                return;
+            }
+
+            fix3 velocity0 = GetVelocityAtPoint(data.rigid0, data.relativeAnchor0);
+            fix3 velocity1 = GetVelocityAtPoint(data.rigid1, data.relativeAnchor1);
+            fix constraintVelocity = math.dot(velocity1 - velocity0, data.axis);
+            fix impulseDelta = -constraintVelocity / effectiveMass;
+            constraint.accumulatedImpulse += impulseDelta;
+
+            ApplyImpulse(
+                true,
+                data.rigid0,
+                data.inverseMass0,
+                data.relativeAnchor0,
+                true,
+                data.rigid1,
+                data.inverseMass1,
+                data.relativeAnchor1,
+                data.axis * impulseDelta);
         }
 
         private void ResolveContactVelocity(ContactManifold manifold, ref ContactPoint point)
@@ -859,6 +1029,112 @@ namespace Maphy.Physics
             }
         }
 
+        private void CorrectConstraints()
+        {
+            for (int i = 0; i < constraintIds.Count; i++)
+            {
+                ulong currentConstraintId = constraintIds[i];
+                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint))
+                {
+                    continue;
+                }
+
+                if (constraint is DistanceConstraint distanceConstraint)
+                {
+                    CorrectDistanceConstraint(distanceConstraint);
+                }
+            }
+        }
+
+        private void CorrectDistanceConstraint(DistanceConstraint constraint)
+        {
+            if (!TryGetDistanceConstraintSolveData(constraint, out DistanceConstraintSolveData data))
+            {
+                constraint.ClearWarmStart();
+                return;
+            }
+
+            fix error = data.currentDistance - constraint.distance;
+            if (math.abs(error) <= math.Epsilon)
+            {
+                return;
+            }
+
+            fix inverseMassSum = data.inverseMass0 + data.inverseMass1;
+            if (inverseMassSum <= fix.Zero)
+            {
+                constraint.ClearWarmStart();
+                return;
+            }
+
+            fix3 correction = data.axis * (error / inverseMassSum);
+            if (data.inverseMass0 > fix.Zero)
+            {
+                TranslateEntity(data.rigid0.id, correction * data.inverseMass0);
+            }
+
+            if (data.inverseMass1 > fix.Zero)
+            {
+                TranslateEntity(data.rigid1.id, -correction * data.inverseMass1);
+            }
+        }
+
+        private bool TryGetDistanceConstraintSolveData(DistanceConstraint constraint, out DistanceConstraintSolveData data)
+        {
+            data = default;
+            if (!IsConstraintActive(constraint)
+                || !rigids.TryGetValue(constraint.rigidId0, out Rigid rigid0)
+                || !rigids.TryGetValue(constraint.rigidId1, out Rigid rigid1)
+                || !entities.TryGetValue(constraint.rigidId0, out Entity entity0)
+                || !entities.TryGetValue(constraint.rigidId1, out Entity entity1))
+            {
+                return false;
+            }
+
+            fix inverseMass0 = rigid0.inverseMass;
+            fix inverseMass1 = rigid1.inverseMass;
+            if (inverseMass0 + inverseMass1 <= fix.Zero)
+            {
+                return false;
+            }
+
+            fix3 relativeAnchor0 = entity0.orientation * constraint.localAnchor0;
+            fix3 relativeAnchor1 = entity1.orientation * constraint.localAnchor1;
+            fix3 worldAnchor0 = entity0.translation + relativeAnchor0;
+            fix3 worldAnchor1 = entity1.translation + relativeAnchor1;
+            fix3 delta = worldAnchor1 - worldAnchor0;
+            fix distanceSq = math.lengthsq(delta);
+            if (distanceSq <= math.Epsilon)
+            {
+                return false;
+            }
+
+            fix currentDistance = math.sqrt(distanceSq);
+            data = new DistanceConstraintSolveData(
+                rigid0,
+                rigid1,
+                inverseMass0,
+                inverseMass1,
+                relativeAnchor0,
+                relativeAnchor1,
+                delta / currentDistance,
+                currentDistance);
+            return true;
+        }
+
+        private bool IsConstraintActive(Constraint constraint)
+        {
+            if (constraint == null || !constraint.enabled)
+            {
+                return false;
+            }
+
+            return rigids.TryGetValue(constraint.rigidId0, out Rigid rigid0)
+                && rigids.TryGetValue(constraint.rigidId1, out Rigid rigid1)
+                && rigid0.enabled
+                && rigid1.enabled;
+        }
+
         private bool TryGetRigidMassData(ulong rigidId, out Rigid rigid, out fix inverseMass)
         {
             if (rigids.TryGetValue(rigidId, out rigid))
@@ -1048,6 +1324,54 @@ namespace Maphy.Physics
             }
         }
 
+        private void RemoveConstraintsForRigid(ulong rigidId)
+        {
+            constraintRemovalBuffer.Clear();
+            for (int i = 0; i < constraintIds.Count; i++)
+            {
+                ulong currentConstraintId = constraintIds[i];
+                if (constraints.TryGetValue(currentConstraintId, out Constraint constraint) && constraint.ContainsRigid(rigidId))
+                {
+                    constraintRemovalBuffer.Add(currentConstraintId);
+                }
+            }
+
+            for (int i = 0; i < constraintRemovalBuffer.Count; i++)
+            {
+                RemoveConstraint(constraintRemovalBuffer[i]);
+            }
+
+            constraintRemovalBuffer.Clear();
+        }
+
+        private void ClearConstraintWarmStartForRigid(ulong rigidId)
+        {
+            for (int i = 0; i < constraintIds.Count; i++)
+            {
+                ulong currentConstraintId = constraintIds[i];
+                if (constraints.TryGetValue(currentConstraintId, out Constraint constraint) && constraint.ContainsRigid(rigidId))
+                {
+                    constraint.ClearWarmStart();
+                }
+            }
+        }
+
+        private bool TryComputeCurrentAnchorDistance(ulong rigidId0, ulong rigidId1, fix3 localAnchor0, fix3 localAnchor1, out fix distance)
+        {
+            distance = fix.Zero;
+            if (rigidId0 == rigidId1
+                || !entities.TryGetValue(rigidId0, out Entity entity0)
+                || !entities.TryGetValue(rigidId1, out Entity entity1))
+            {
+                return false;
+            }
+
+            fix3 worldAnchor0 = entity0.translation + entity0.orientation * localAnchor0;
+            fix3 worldAnchor1 = entity1.translation + entity1.orientation * localAnchor1;
+            distance = math.distance(worldAnchor0, worldAnchor1);
+            return true;
+        }
+
         private IReadOnlyList<Collider> GetActiveColliders()
         {
             activeColliders.Clear();
@@ -1078,6 +1402,38 @@ namespace Maphy.Physics
             Enter,
             Stay,
             Exit
+        }
+
+        private readonly struct DistanceConstraintSolveData
+        {
+            public readonly Rigid rigid0;
+            public readonly Rigid rigid1;
+            public readonly fix inverseMass0;
+            public readonly fix inverseMass1;
+            public readonly fix3 relativeAnchor0;
+            public readonly fix3 relativeAnchor1;
+            public readonly fix3 axis;
+            public readonly fix currentDistance;
+
+            public DistanceConstraintSolveData(
+                Rigid rigid0,
+                Rigid rigid1,
+                fix inverseMass0,
+                fix inverseMass1,
+                fix3 relativeAnchor0,
+                fix3 relativeAnchor1,
+                fix3 axis,
+                fix currentDistance)
+            {
+                this.rigid0 = rigid0;
+                this.rigid1 = rigid1;
+                this.inverseMass0 = inverseMass0;
+                this.inverseMass1 = inverseMass1;
+                this.relativeAnchor0 = relativeAnchor0;
+                this.relativeAnchor1 = relativeAnchor1;
+                this.axis = axis;
+                this.currentDistance = currentDistance;
+            }
         }
 
         private readonly struct CollisionEventState
