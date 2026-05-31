@@ -3,6 +3,28 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
+    public struct ContactManifoldSettings
+    {
+        public fix normalPersistenceDot;
+        public fix anchorMatchDistance;
+        public fix positionMatchDistance;
+        public int staleFrameLimit;
+
+        public static ContactManifoldSettings Default
+        {
+            get
+            {
+                return new ContactManifoldSettings
+                {
+                    normalPersistenceDot = fix._0_5,
+                    anchorMatchDistance = fix._0_02,
+                    positionMatchDistance = fix._0_02,
+                    staleFrameLimit = 1,
+                };
+            }
+        }
+    }
+
     public struct ContactPoint
     {
         public fix3 position;
@@ -14,6 +36,7 @@ namespace Maphy.Physics
         public fix tangentImpulse1;
         public fix3 tangent0;
         public fix3 tangent1;
+        public int featureId;
         public int lifetime;
 
         public ContactPoint(
@@ -21,6 +44,7 @@ namespace Maphy.Physics
             fix3 pointOnCollider0,
             fix3 pointOnCollider1,
             fix penetrationDepth,
+            int featureId,
             ContactPoint previous,
             bool preserveImpulse)
         {
@@ -33,6 +57,7 @@ namespace Maphy.Physics
             tangentImpulse1 = preserveImpulse ? previous.tangentImpulse1 : fix.Zero;
             tangent0 = preserveImpulse ? previous.tangent0 : fix3.zero;
             tangent1 = preserveImpulse ? previous.tangent1 : fix3.zero;
+            this.featureId = featureId;
             lifetime = preserveImpulse ? previous.lifetime + 1 : 1;
         }
     }
@@ -81,6 +106,15 @@ namespace Maphy.Physics
 
         public void Update(CollisionInfo collision, bool isTrigger, int frameIndex)
         {
+            Update(collision, isTrigger, frameIndex, ContactManifoldSettings.Default);
+        }
+
+        public void Update(CollisionInfo collision, bool isTrigger, int frameIndex, ContactManifoldSettings settings)
+        {
+            fix3 previousNormal = normal;
+            fix normalPersistenceDot = math.clamp(settings.normalPersistenceDot, fix.Zero, fix.One);
+            bool canPreserveImpulse = contactCount > 0 && math.dot(previousNormal, collision.normal) >= normalPersistenceDot;
+
             key = collision.key;
             colliderId0 = collision.id;
             colliderId1 = collision.otherId;
@@ -94,7 +128,8 @@ namespace Maphy.Physics
             for (int i = 0; i < newContactCount; i++)
             {
                 CollisionContact contact = collision[i];
-                bool preserveImpulse = TryFindPersistentPoint(contact.position, out ContactPoint previous);
+                ContactPoint previous = default;
+                bool preserveImpulse = canPreserveImpulse && TryFindPersistentPoint(contact, settings, out previous);
                 SetPoint(
                     i,
                     new ContactPoint(
@@ -102,6 +137,7 @@ namespace Maphy.Physics
                         contact.pointOnCollider0,
                         contact.pointOnCollider1,
                         contact.penetrationDepth,
+                        contact.featureId,
                         previous,
                         preserveImpulse));
             }
@@ -172,28 +208,48 @@ namespace Maphy.Physics
             }
         }
 
-        private bool TryFindPersistentPoint(fix3 position, out ContactPoint point)
+        private bool TryFindPersistentPoint(CollisionContact contact, ContactManifoldSettings settings, out ContactPoint point)
         {
-            fix maxDistanceSq = fix._0_01 * fix._0_01;
+            fix anchorMatchDistance = math.max(fix.Zero, settings.anchorMatchDistance);
+            fix positionMatchDistance = math.max(fix.Zero, settings.positionMatchDistance);
+            fix maxAnchorDistanceSq = anchorMatchDistance * anchorMatchDistance;
+            fix maxPositionDistanceSq = positionMatchDistance * positionMatchDistance;
+            fix bestScore = fix.Max;
+            bool found = false;
+            point = default;
+
             for (int i = 0; i < contactCount; i++)
             {
                 ContactPoint candidate = this[i];
-                if (math.distancesq(candidate.position, position) <= maxDistanceSq)
+                if (contact.featureId != 0 && candidate.featureId == contact.featureId)
                 {
                     point = candidate;
                     return true;
                 }
+
+                fix anchorDistanceSq = math.distancesq(candidate.pointOnCollider0, contact.pointOnCollider0)
+                    + math.distancesq(candidate.pointOnCollider1, contact.pointOnCollider1);
+                fix positionDistanceSq = math.distancesq(candidate.position, contact.position);
+                if (anchorDistanceSq <= maxAnchorDistanceSq || positionDistanceSq <= maxPositionDistanceSq)
+                {
+                    fix score = math.min(anchorDistanceSq, positionDistanceSq);
+                    if (found && score >= bestScore)
+                    {
+                        continue;
+                    }
+
+                    found = true;
+                    bestScore = score;
+                    point = candidate;
+                }
             }
 
-            point = default;
-            return false;
+            return found;
         }
     }
 
     internal sealed class ContactManifoldCache
     {
-        private const int StaleFrameLimit = 1;
-
         private readonly Dictionary<BroadCollisionPairKey, ContactManifold> manifoldsByKey = new Dictionary<BroadCollisionPairKey, ContactManifold>();
         private readonly List<ContactManifold> activeManifolds = new List<ContactManifold>();
         private readonly List<BroadCollisionPairKey> staleKeys = new List<BroadCollisionPairKey>();
@@ -234,6 +290,43 @@ namespace Maphy.Physics
 
         public IReadOnlyList<ContactManifold> Update(IEnumerable<NarrowCollisionSystem.CollisionPair> collisionPairs)
         {
+            return Update(collisionPairs, ContactManifoldSettings.Default);
+        }
+
+        public IReadOnlyList<ContactManifold> Update(IReadOnlyList<NarrowCollisionSystem.CollisionPair> collisionPairs, ContactManifoldSettings settings)
+        {
+            frameIndex++;
+            activeManifolds.Clear();
+
+            for (int i = 0; i < collisionPairs.Count; i++)
+            {
+                NarrowCollisionSystem.CollisionPair pair = collisionPairs[i];
+                if (!pair.collision.hasContact)
+                {
+                    continue;
+                }
+
+                if (!manifoldsByKey.TryGetValue(pair.key, out ContactManifold manifold))
+                {
+                    manifold = new ContactManifold();
+                    manifoldsByKey.Add(pair.key, manifold);
+                }
+
+                manifold.Update(pair.collision, pair.collider0.isTrigger || pair.collider1.isTrigger, frameIndex, settings);
+                activeManifolds.Add(manifold);
+            }
+
+            RemoveStaleManifolds(settings);
+            return activeManifolds;
+        }
+
+        public IReadOnlyList<ContactManifold> Update(IEnumerable<NarrowCollisionSystem.CollisionPair> collisionPairs, ContactManifoldSettings settings)
+        {
+            if (collisionPairs is IReadOnlyList<NarrowCollisionSystem.CollisionPair> list)
+            {
+                return Update(list, settings);
+            }
+
             frameIndex++;
             activeManifolds.Clear();
 
@@ -250,20 +343,21 @@ namespace Maphy.Physics
                     manifoldsByKey.Add(pair.key, manifold);
                 }
 
-                manifold.Update(pair.collision, pair.collider0.isTrigger || pair.collider1.isTrigger, frameIndex);
+                manifold.Update(pair.collision, pair.collider0.isTrigger || pair.collider1.isTrigger, frameIndex, settings);
                 activeManifolds.Add(manifold);
             }
 
-            RemoveStaleManifolds();
+            RemoveStaleManifolds(settings);
             return activeManifolds;
         }
 
-        private void RemoveStaleManifolds()
+        private void RemoveStaleManifolds(ContactManifoldSettings settings)
         {
+            int staleFrameLimit = settings.staleFrameLimit >= 0 ? settings.staleFrameLimit : 1;
             staleKeys.Clear();
             foreach (KeyValuePair<BroadCollisionPairKey, ContactManifold> item in manifoldsByKey)
             {
-                if (frameIndex - item.Value.lastUpdatedFrame > StaleFrameLimit)
+                if (frameIndex - item.Value.lastUpdatedFrame > staleFrameLimit)
                 {
                     staleKeys.Add(item.Key);
                 }

@@ -12,12 +12,33 @@ namespace Maphy.Physics
         public IReadOnlyList<BroadCollisionPair> BroadphasePairs => broadphase.Pairs;
         public IReadOnlyList<NarrowCollisionSystem.CollisionPair> CollisionPairs => narrowphase.CollisionPairs;
         public IReadOnlyList<ContactManifold> ContactManifolds => contactCache.ActiveManifolds;
+        public int BroadphaseProxyCount => broadphase.Proxies.Count;
+        public int BroadphaseTreeProxyCount => broadphase.TreeProxyCount;
+        public int BroadphaseTreeHeight => broadphase.TreeHeight;
+        public int BroadphaseTreeMaxBalance => broadphase.TreeMaxBalance;
 
         public void Collision(IEnumerable<Collider> colliders)
         {
+            Collision(colliders, NarrowPhaseAlgorithm.Auto);
+        }
+
+        public void Collision(IEnumerable<Collider> colliders, NarrowPhaseAlgorithm algorithm)
+        {
+            Collision(colliders, algorithm, ContactManifoldSettings.Default);
+        }
+
+        public void Collision(IReadOnlyList<Collider> colliders, NarrowPhaseAlgorithm algorithm, ContactManifoldSettings manifoldSettings)
+        {
             IReadOnlyList<BroadCollisionPair> pairs = broadphase.Collision(colliders);
-            narrowphase.Collision(pairs);
-            contactCache.Update(narrowphase.CollisionPairs);
+            IReadOnlyList<NarrowCollisionSystem.CollisionPair> collisionPairs = narrowphase.Collision(pairs, algorithm);
+            contactCache.Update(collisionPairs, manifoldSettings);
+        }
+
+        public void Collision(IEnumerable<Collider> colliders, NarrowPhaseAlgorithm algorithm, ContactManifoldSettings manifoldSettings)
+        {
+            IReadOnlyList<BroadCollisionPair> pairs = broadphase.Collision(colliders);
+            IReadOnlyList<NarrowCollisionSystem.CollisionPair> collisionPairs = narrowphase.Collision(pairs, algorithm);
+            contactCache.Update(collisionPairs, manifoldSettings);
         }
 
         public bool RemoveCollider(ulong colliderId)
@@ -60,6 +81,11 @@ namespace Maphy.Physics
 
         public bool TryGetCollision(Collider a, Collider b, out CollisionInfo collision)
         {
+            return TryGetCollision(a, b, NarrowPhaseAlgorithm.Auto, out collision);
+        }
+
+        public bool TryGetCollision(Collider a, Collider b, NarrowPhaseAlgorithm algorithm, out CollisionInfo collision)
+        {
             collision = default;
             if (a.shape == null || b.shape == null)
             {
@@ -73,7 +99,7 @@ namespace Maphy.Physics
                 return false;
             }
 
-            return Physics.TryComputeContact(new BroadCollisionPair(proxy0, proxy1), out collision);
+            return Physics.TryComputeContact(new BroadCollisionPair(proxy0, proxy1), algorithm, out collision);
         }
     }
 }

@@ -34,11 +34,37 @@ namespace Maphy.Physics
 
         public IReadOnlyList<CollisionPair> Collision(IEnumerable<BroadCollisionPair> pairs)
         {
+            return Collision(pairs, NarrowPhaseAlgorithm.Auto);
+        }
+
+        public IReadOnlyList<CollisionPair> Collision(IEnumerable<BroadCollisionPair> pairs, NarrowPhaseAlgorithm algorithm)
+        {
+            if (pairs is IReadOnlyList<BroadCollisionPair> list)
+            {
+                return Collision(list, algorithm);
+            }
+
             collisionPairs.Clear();
 
             foreach (BroadCollisionPair pair in pairs)
             {
-                if (Physics.TryComputeContact(pair, out CollisionInfo collision))
+                if (Physics.TryComputeContact(pair, algorithm, out CollisionInfo collision))
+                {
+                    collisionPairs.Add(new CollisionPair(pair, collision));
+                }
+            }
+
+            return collisionPairs;
+        }
+
+        public IReadOnlyList<CollisionPair> Collision(IReadOnlyList<BroadCollisionPair> pairs, NarrowPhaseAlgorithm algorithm)
+        {
+            collisionPairs.Clear();
+
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                BroadCollisionPair pair = pairs[i];
+                if (Physics.TryComputeContact(pair, algorithm, out CollisionInfo collision))
                 {
                     collisionPairs.Add(new CollisionPair(pair, collision));
                 }
@@ -60,6 +86,11 @@ namespace Maphy.Physics
         public static bool TryComputeContact(Shape shape0, Shape shape1, out CollisionInfo collision)
         {
             return Physics.TryComputeContact(shape0, shape1, out collision);
+        }
+
+        public static bool TryComputeContact(Shape shape0, Shape shape1, NarrowPhaseAlgorithm algorithm, out CollisionInfo collision)
+        {
+            return Physics.TryComputeContact(shape0, shape1, algorithm, out collision);
         }
     }
 }

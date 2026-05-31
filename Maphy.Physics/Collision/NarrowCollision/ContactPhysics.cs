@@ -6,6 +6,34 @@ namespace Maphy.Physics
     {
         public static bool TryComputeContact(Shape shape0, Shape shape1, out CollisionInfo collision)
         {
+            return TryComputeContact(shape0, shape1, NarrowPhaseAlgorithm.Auto, out collision);
+        }
+
+        public static bool TryComputeContact(Shape shape0, Shape shape1, NarrowPhaseAlgorithm algorithm, out CollisionInfo collision)
+        {
+            switch (algorithm)
+            {
+                case NarrowPhaseAlgorithm.GJK:
+                    return TryComputeGJKContact(shape0, shape1, out collision);
+                case NarrowPhaseAlgorithm.SAT:
+                case NarrowPhaseAlgorithm.Auto:
+                default:
+                    return TryComputeSATContact(shape0, shape1, out collision);
+            }
+        }
+
+        private static bool TryComputeGJKContact(Shape shape0, Shape shape1, out CollisionInfo collision)
+        {
+            if (TryComputeGJKEPAContact(shape0, shape1, out collision))
+            {
+                return true;
+            }
+
+            return GJKOverlaps(shape0, shape1) && TryComputeSATContact(shape0, shape1, out collision);
+        }
+
+        private static bool TryComputeSATContact(Shape shape0, Shape shape1, out CollisionInfo collision)
+        {
             collision = default;
             if (shape0 == null || shape1 == null)
             {
@@ -76,7 +104,12 @@ namespace Maphy.Physics
 
         internal static bool TryComputeContact(BroadCollisionPair pair, out CollisionInfo collision)
         {
-            if (!TryComputeContact(pair.collider0.shape, pair.collider1.shape, out collision))
+            return TryComputeContact(pair, NarrowPhaseAlgorithm.Auto, out collision);
+        }
+
+        internal static bool TryComputeContact(BroadCollisionPair pair, NarrowPhaseAlgorithm algorithm, out CollisionInfo collision)
+        {
+            if (!TryComputeContact(pair.collider0.shape, pair.collider1.shape, algorithm, out collision))
             {
                 return false;
             }
@@ -93,11 +126,13 @@ namespace Maphy.Physics
             int referenceAxisIndex = -1;
             bool referenceIsBox0 = true;
             bool faceContact = true;
+            int edgeAxisIndex0 = -1;
+            int edgeAxisIndex1 = -1;
             fix3 delta = box1.center - box0.center;
 
             for (int i = 0; i < 3; i++)
             {
-                if (!TestBoxAxis(box0, box1, box0.GetAxis(i), delta, i, true, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                if (!TestBoxAxis(box0, box1, box0.GetAxis(i), delta, i, -1, -1, true, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
                 {
                     return false;
                 }
@@ -105,7 +140,7 @@ namespace Maphy.Physics
 
             for (int i = 0; i < 3; i++)
             {
-                if (!TestBoxAxis(box0, box1, box1.GetAxis(i), delta, i, false, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                if (!TestBoxAxis(box0, box1, box1.GetAxis(i), delta, i, -1, -1, false, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
                 {
                     return false;
                 }
@@ -121,7 +156,7 @@ namespace Maphy.Physics
                         continue;
                     }
 
-                    if (!TestBoxAxis(box0, box1, axis, delta, -1, true, false, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                    if (!TestBoxAxis(box0, box1, axis, delta, -1, i, j, true, false, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
                     {
                         return false;
                     }
@@ -145,6 +180,10 @@ namespace Maphy.Physics
                     AddBoxFaceContacts(box1, box0, -normal, referenceAxisIndex, false, penetrationDepth, ref collision);
                 }
             }
+            else
+            {
+                AddBoxEdgeContact(box0, box1, normal, edgeAxisIndex0, edgeAxisIndex1, penetrationDepth, ref collision);
+            }
 
             if (!collision.hasContact)
             {
@@ -160,13 +199,17 @@ namespace Maphy.Physics
             fix3 axis,
             fix3 delta,
             int axisIndex,
+            int edgeAxisIndex0,
+            int edgeAxisIndex1,
             bool axisFromBox0,
             bool isFaceAxis,
             ref fix bestPenetrationDepth,
             ref fix3 bestNormal,
             ref int bestReferenceAxisIndex,
             ref bool bestReferenceIsBox0,
-            ref bool bestFaceContact)
+            ref bool bestFaceContact,
+            ref int bestEdgeAxisIndex0,
+            ref int bestEdgeAxisIndex1)
         {
             fix lengthSq = math.lengthsq(axis);
             if (lengthSq <= math.Epsilon)
@@ -189,6 +232,8 @@ namespace Maphy.Physics
                 bestReferenceAxisIndex = axisIndex;
                 bestReferenceIsBox0 = axisFromBox0;
                 bestFaceContact = isFaceAxis;
+                bestEdgeAxisIndex0 = edgeAxisIndex0;
+                bestEdgeAxisIndex1 = edgeAxisIndex1;
             }
 
             return true;
@@ -211,50 +256,168 @@ namespace Maphy.Physics
             fix3 referenceAxis = reference.GetAxis(referenceAxisIndex);
             fix normalSign = math.dot(referenceAxis, normalFromReferenceToIncident) >= fix.Zero ? fix.One : -fix.One;
             fix3 normal = referenceAxis * normalSign;
-            int tangentIndex0 = (referenceAxisIndex + 1) % 3;
-            int tangentIndex1 = (referenceAxisIndex + 2) % 3;
-            fix3 tangent0 = reference.GetAxis(tangentIndex0);
-            fix3 tangent1 = reference.GetAxis(tangentIndex1);
             fix facePlane = math.dot(reference.center, normal) + reference.GetExtent(referenceAxisIndex);
+            fix3[] clipped = new fix3[8];
+            fix3[] scratch = new fix3[8];
+            int clippedCount = GetIncidentFaceVertices(incident, normal, clipped);
 
-            GetOverlapInterval(reference, incident, tangent0, tangentIndex0, out fix min0, out fix max0);
-            GetOverlapInterval(reference, incident, tangent1, tangentIndex1, out fix min1, out fix max1);
-            if (min0 > max0 || min1 > max1)
+            for (int axisIndex = 0; axisIndex < 3; axisIndex++)
+            {
+                if (axisIndex == referenceAxisIndex)
+                {
+                    continue;
+                }
+
+                fix3 axis = reference.GetAxis(axisIndex);
+                fix max = math.dot(reference.center, axis) + reference.GetExtent(axisIndex);
+                clippedCount = ClipPolygon(clipped, scratch, clippedCount, axis, max);
+                if (clippedCount == 0)
+                {
+                    return;
+                }
+
+                fix min = -math.dot(reference.center, axis) + reference.GetExtent(axisIndex);
+                clippedCount = ClipPolygon(clipped, scratch, clippedCount, -axis, min);
+                if (clippedCount == 0)
+                {
+                    return;
+                }
+            }
+
+            for (int i = 0; i < clippedCount; i++)
+            {
+                fix3 pointOnIncident = clipped[i];
+                fix depth = facePlane - math.dot(pointOnIncident, normal);
+                if (depth < -math.Epsilon)
+                {
+                    continue;
+                }
+
+                fix contactDepth = math.max(penetrationDepth, depth);
+                fix3 pointOnReference = pointOnIncident + normal * depth;
+                int featureId = MakeContactFeatureId(referenceIsShape0 ? 1 : 2, referenceAxisIndex, i, 0);
+                if (referenceIsShape0)
+                {
+                    collision.AddContact(pointOnReference, pointOnIncident, contactDepth, featureId);
+                }
+                else
+                {
+                    collision.AddContact(pointOnIncident, pointOnReference, contactDepth, featureId);
+                }
+            }
+        }
+
+        private static int GetIncidentFaceVertices(BoxData box, fix3 referenceNormal, fix3[] output)
+        {
+            int normalAxisIndex = 0;
+            fix bestDot = math.abs(math.dot(box.GetAxis(0), referenceNormal));
+            for (int i = 1; i < 3; i++)
+            {
+                fix dot = math.abs(math.dot(box.GetAxis(i), referenceNormal));
+                if (dot > bestDot)
+                {
+                    bestDot = dot;
+                    normalAxisIndex = i;
+                }
+            }
+
+            fix3 normalAxis = box.GetAxis(normalAxisIndex);
+            fix normalSign = math.dot(normalAxis, referenceNormal) > fix.Zero ? -fix.One : fix.One;
+            int tangentIndex0 = (normalAxisIndex + 1) % 3;
+            int tangentIndex1 = (normalAxisIndex + 2) % 3;
+            fix3 tangent0 = box.GetAxis(tangentIndex0);
+            fix3 tangent1 = box.GetAxis(tangentIndex1);
+            fix3 faceCenter = box.center + normalAxis * (box.GetExtent(normalAxisIndex) * normalSign);
+            fix3 edge0 = tangent0 * box.GetExtent(tangentIndex0);
+            fix3 edge1 = tangent1 * box.GetExtent(tangentIndex1);
+
+            output[0] = faceCenter - edge0 - edge1;
+            output[1] = faceCenter - edge0 + edge1;
+            output[2] = faceCenter + edge0 + edge1;
+            output[3] = faceCenter + edge0 - edge1;
+            return 4;
+        }
+
+        private static int ClipPolygon(fix3[] polygon, fix3[] scratch, int count, fix3 planeNormal, fix planeOffset)
+        {
+            if (count == 0)
+            {
+                return 0;
+            }
+
+            int outputCount = 0;
+            fix3 previous = polygon[count - 1];
+            fix previousDistance = math.dot(previous, planeNormal) - planeOffset;
+            bool previousInside = previousDistance <= fix.Zero;
+
+            for (int i = 0; i < count; i++)
+            {
+                fix3 current = polygon[i];
+                fix currentDistance = math.dot(current, planeNormal) - planeOffset;
+                bool currentInside = currentDistance <= fix.Zero;
+
+                if (currentInside != previousInside)
+                {
+                    fix denominator = previousDistance - currentDistance;
+                    fix t = math.abs(denominator) > math.Epsilon ? previousDistance / denominator : fix.Zero;
+                    scratch[outputCount++] = previous + (current - previous) * t;
+                }
+
+                if (currentInside)
+                {
+                    scratch[outputCount++] = current;
+                }
+
+                previous = current;
+                previousDistance = currentDistance;
+                previousInside = currentInside;
+            }
+
+            for (int i = 0; i < outputCount; i++)
+            {
+                polygon[i] = scratch[i];
+            }
+
+            return outputCount;
+        }
+
+        private static void AddBoxEdgeContact(
+            BoxData box0,
+            BoxData box1,
+            fix3 normal,
+            int edgeAxisIndex0,
+            int edgeAxisIndex1,
+            fix penetrationDepth,
+            ref CollisionInfo collision)
+        {
+            if (edgeAxisIndex0 < 0 || edgeAxisIndex1 < 0)
             {
                 return;
             }
 
-            fix incidentPlane = math.dot(incident.center, normal) - incident.ProjectRadius(normal);
-            fix depth = math.max(fix.Zero, facePlane - incidentPlane);
-            fix contactDepth = math.max(penetrationDepth, depth);
-            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, min0, min1, incidentPlane, contactDepth, ref collision);
-            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, min0, max1, incidentPlane, contactDepth, ref collision);
-            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, max0, min1, incidentPlane, contactDepth, ref collision);
-            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, max0, max1, incidentPlane, contactDepth, ref collision);
+            GetIncidentEdge(box0, edgeAxisIndex0, normal, out fix3 edge00, out fix3 edge01);
+            GetIncidentEdge(box1, edgeAxisIndex1, -normal, out fix3 edge10, out fix3 edge11);
+            GetClosestPointsBetweenSegments(edge00, edge01, edge10, edge11, out fix3 point0, out fix3 point1);
+            collision.AddContact(point0, point1, penetrationDepth, MakeContactFeatureId(3, edgeAxisIndex0, edgeAxisIndex1, 0));
         }
 
-        private static void AddBoxFaceContact(
-            bool referenceIsShape0,
-            fix3 normal,
-            fix facePlane,
-            fix3 tangent0,
-            fix3 tangent1,
-            fix tangentDistance0,
-            fix tangentDistance1,
-            fix incidentPlane,
-            fix penetrationDepth,
-            ref CollisionInfo collision)
+        private static void GetIncidentEdge(BoxData box, int edgeAxisIndex, fix3 supportDirection, out fix3 edge0, out fix3 edge1)
         {
-            fix3 pointOnReference = normal * facePlane + tangent0 * tangentDistance0 + tangent1 * tangentDistance1;
-            fix3 pointOnIncident = pointOnReference - normal * (facePlane - incidentPlane);
-            if (referenceIsShape0)
+            fix3 center = box.center;
+            for (int i = 0; i < 3; i++)
             {
-                collision.AddContact(pointOnReference, pointOnIncident, penetrationDepth);
+                if (i == edgeAxisIndex)
+                {
+                    continue;
+                }
+
+                fix3 axis = box.GetAxis(i);
+                center += axis * (math.dot(axis, supportDirection) >= fix.Zero ? box.GetExtent(i) : -box.GetExtent(i));
             }
-            else
-            {
-                collision.AddContact(pointOnIncident, pointOnReference, penetrationDepth);
-            }
+
+            fix3 edgeAxis = box.GetAxis(edgeAxisIndex) * box.GetExtent(edgeAxisIndex);
+            edge0 = center - edgeAxis;
+            edge1 = center + edgeAxis;
         }
 
         private static void GetOverlapInterval(BoxData reference, BoxData incident, fix3 axis, int referenceExtentIndex, out fix min, out fix max)
@@ -566,6 +729,14 @@ namespace Maphy.Physics
         private static void AddContact(ref CollisionInfo collision, fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth)
         {
             collision.AddContact(pointOnCollider0, pointOnCollider1, penetrationDepth);
+        }
+
+        private static int MakeContactFeatureId(int type, int axis0, int axis1, int pointIndex)
+        {
+            return ((type & 0xff) << 24)
+                | ((axis0 + 1) & 0xff) << 16
+                | ((axis1 + 1) & 0xff) << 8
+                | (pointIndex & 0xff);
         }
 
         private static fix3 GetShapeCenter(Shape shape)

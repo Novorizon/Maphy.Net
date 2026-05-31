@@ -30,13 +30,23 @@ internal static class Program
         Run("physics raycast hits supported shapes", TestPhysicsRaycastHitsSupportedShapes);
         Run("world raycast returns nearest hit", TestWorldRaycastReturnsNearestHit);
         Run("world builds contact manifolds", TestWorldContactManifolds);
+        Run("contact manifold matches persistent anchors", TestContactManifoldMatchesPersistentAnchors);
         Run("contact solver preserves warm start impulses", TestContactSolverPreservesWarmStartImpulses);
         Run("box face contact builds multi point manifold", TestBoxFaceContactBuildsMultiPointManifold);
         Run("OBB contact uses oriented SAT normal", TestOBBContactUsesOrientedSATNormal);
+        Run("SAT narrow phase can be selected", TestSATNarrowPhaseCanBeSelected);
+        Run("GJK narrow phase can be selected", TestGJKNarrowPhaseCanBeSelected);
+        Run("GJK EPA handles rotated box boundary", TestGJKEPAHandlesRotatedBoxBoundary);
         Run("capsule OBB contact uses segment box distance", TestCapsuleOBBContactUsesSegmentBoxDistance);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
+        Run("world fixed step accumulator advances deterministically", TestWorldFixedStepAccumulatorAdvancesDeterministically);
+        Run("world state hash is replay deterministic", TestWorldStateHashIsReplayDeterministic);
+        Run("world state hash includes constraint parameters", TestWorldStateHashIncludesConstraintParameters);
+        Run("world long replay hash is deterministic", TestWorldLongReplayHashIsDeterministic);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
+        Run("position correction can be clamped", TestPositionCorrectionCanBeClamped);
+        Run("stacked boxes stay separated under gravity", TestStackedBoxesStaySeparatedUnderGravity);
         Run("world dispatches collision callbacks", TestWorldDispatchesCollisionCallbacks);
         Run("trigger reports contact without solver response", TestTriggerReportsContactWithoutSolverResponse);
         Run("collision events report enter stay exit", TestCollisionEventsReportEnterStayExit);
@@ -47,19 +57,43 @@ internal static class Program
         Run("distance constraint preserves rigid distance", TestDistanceConstraintPreservesRigidDistance);
         Run("disabled rigid disables distance constraint", TestDisabledRigidDisablesDistanceConstraint);
         Run("removing rigid removes constraints", TestRemovingRigidRemovesConstraints);
+        Run("point constraint pins anchors", TestPointConstraintPinsAnchors);
+        Run("spring distance constraint pulls toward rest length", TestSpringDistanceConstraintPullsTowardRestLength);
+        Run("hinge constraint pins anchors", TestHingeConstraintPinsAnchors);
+        Run("fixed constraint locks relative pose", TestFixedConstraintLocksRelativePose);
+        Run("slider constraint preserves slide axis", TestSliderConstraintPreservesSlideAxis);
         Run("static rigid ignores motion and forces", TestStaticRigidIgnoresMotionAndForces);
         Run("dynamic body resolves against static body", TestDynamicBodyResolvesAgainstStaticBody);
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
         Run("kinematic body pushes dynamic body", TestKinematicBodyPushesDynamicBody);
         Run("solver applies linear friction", TestSolverAppliesLinearFriction);
+        Run("restitution threshold suppresses low speed bounce", TestRestitutionThresholdSuppressesLowSpeedBounce);
         Run("material bounciness affects restitution", TestMaterialBouncinessAffectsRestitution);
         Run("material friction affects solver", TestMaterialFrictionAffectsSolver);
         Run("world integrates angular velocity", TestWorldIntegratesAngularVelocity);
         Run("world integrates torque", TestWorldIntegratesTorque);
+        Run("shape and constraint frameworks expose capabilities", TestShapeAndConstraintFrameworksExposeCapabilities);
+        Run("physics shape cast reports time of impact", TestPhysicsShapeCastReportsTimeOfImpact);
+        Run("physics shape cast sweeps capsule targets", TestPhysicsShapeCastSweepsCapsuleTargets);
+        Run("world clamps unsafe motion values", TestWorldClampsUnsafeMotionValues);
+        Run("solver clamps contact impulses", TestSolverClampsContactImpulses);
+        Run("contact manifold settings control persistence", TestContactManifoldSettingsControlPersistence);
+        Run("world reports step stats after update", TestWorldReportsStepStatsAfterUpdate);
+        Run("world warm update allocation baseline stays low", TestWorldWarmUpdateAllocationBaselineStaysLow);
+        Run("collision callback lifecycle changes are deferred safely", TestCollisionCallbackLifecycleChangesAreDeferredSafely);
+        Run("collision callback exceptions can be captured", TestCollisionCallbackExceptionsCanBeCaptured);
+        Run("CCD stops fast body before static collider", TestCCDStopsFastBodyBeforeStaticCollider);
+        Run("CCD sweeps capsule against static collider", TestCCDSweepsCapsuleAgainstStaticCollider);
+        Run("CCD sweeps sphere against sphere", TestCCDSweepsSphereAgainstSphere);
+        Run("CCD sweeps dynamic sphere against dynamic sphere", TestCCDSweepsDynamicSphereAgainstDynamicSphere);
         Run("off center contact applies angular impulse", TestOffCenterContactAppliesAngularImpulse);
         Run("collider initializes rigid mass properties", TestColliderInitializesRigidMassProperties);
         Run("collider density updates automatic mass properties", TestColliderDensityUpdatesAutomaticMassProperties);
         Run("manual mass properties survive density changes", TestManualMassPropertiesSurviveDensityChanges);
+        Run("rigid supports multiple colliders", TestRigidSupportsMultipleColliders);
+        Run("compound body aggregates automatic mass properties", TestCompoundBodyAggregatesAutomaticMassProperties);
+        Run("world builds islands from contacts and constraints", TestWorldBuildsIslandsFromContactsAndConstraints);
+        Run("sleeping island skips integration and wakes", TestSleepingIslandSkipsIntegrationAndWakes);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -401,6 +435,62 @@ internal static class Program
         AssertTrue(math.abs(collision.penetrationDepth - fix._0_5) <= fix._0_0001, "rotated box penetration should be close to expected overlap");
     }
 
+    private static void TestSATNarrowPhaseCanBeSelected()
+    {
+        OBB box0 = new OBB(fix3.zero, new fix3(2, 2, 2), quaternion.identity);
+        OBB box1 = new OBB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(2, 2, 2), quaternion.RotateZ(math.PI * fix._0_25));
+
+        AssertTrue(PhysicsApi.TryComputeContact(box0, box1, NarrowPhaseAlgorithm.SAT, out CollisionInfo collision), "SAT narrow phase should produce box contact");
+        AssertTrue(collision.contactCount > 0, "SAT contact should include at least one clipped contact point");
+        AssertTrue(collision.penetrationDepth > fix.Zero, "SAT contact should report penetration");
+    }
+
+    private static void TestGJKNarrowPhaseCanBeSelected()
+    {
+        Sphere sphere0 = new Sphere(fix3.zero, fix.One);
+        Sphere sphere1 = new Sphere(new fix3(fix._1_5, fix.Zero, fix.Zero), fix.One);
+        Sphere separated = new Sphere(new fix3(4, 0, 0), fix.One);
+        AABB box0 = new AABB(fix3.zero, new fix3(2, 2, 2));
+        AABB box1 = new AABB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(2, 2, 2));
+        WorldSettings settings = new WorldSettings(false);
+        settings.narrowPhaseAlgorithm = NarrowPhaseAlgorithm.GJK;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        AssertTrue(PhysicsApi.GJKOverlaps(sphere0, sphere1), "GJK should detect overlapping convex shapes");
+        AssertFalse(PhysicsApi.GJKOverlaps(sphere0, separated), "GJK should reject separated convex shapes");
+        AssertTrue(PhysicsApi.TryComputeGJKEPAContact(sphere0, sphere1, out CollisionInfo epaCollision), "EPA should produce contact from GJK simplex");
+        AssertNear(fix3.right, epaCollision.normal, fix._0_01);
+        AssertTrue(math.abs(epaCollision.penetrationDepth - fix._0_5) <= fix._0_01, "EPA should report sphere penetration depth");
+        AssertTrue(PhysicsApi.TryComputeGJKEPAContact(box0, box1, out CollisionInfo boxEpaCollision), "EPA should produce box contact from GJK simplex");
+        AssertTrue(math.dot(boxEpaCollision.normal, fix3.right) > fix._0_5, "EPA box normal should point from first shape to second");
+        AssertTrue(boxEpaCollision.penetrationDepth > fix.Zero, "EPA box contact should report penetration");
+        AssertTrue(PhysicsApi.TryComputeContact(sphere0, sphere1, NarrowPhaseAlgorithm.GJK, out CollisionInfo collision), "GJK narrow phase should produce contact through contact fallback");
+        AssertEqual(1, collision.contactCount);
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.ContactManifolds.Count);
+    }
+
+    private static void TestGJKEPAHandlesRotatedBoxBoundary()
+    {
+        quaternion rotation0 = quaternion.RotateZ(math.PI * fix._0_25);
+        quaternion rotation1 = quaternion.RotateZ(-math.PI * fix._0_25);
+        OBB box0 = new OBB(fix3.zero, new fix3(2, 2, 2), rotation0);
+        OBB box1 = new OBB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(2, 2, 2), rotation1);
+        OBB separated = new OBB(new fix3(5, 0, 0), new fix3(2, 2, 2), rotation1);
+
+        AssertTrue(PhysicsApi.GJKOverlaps(box0, box1), "GJK should detect rotated box overlap");
+        AssertFalse(PhysicsApi.GJKOverlaps(box0, separated), "GJK should reject separated rotated boxes");
+        AssertTrue(PhysicsApi.TryComputeGJKEPAContact(box0, box1, out CollisionInfo collision), "EPA should generate a rotated box contact");
+        AssertTrue(collision.penetrationDepth > fix.Zero, "EPA rotated box contact should report penetration");
+        AssertTrue(collision.contactCount > 0, "EPA rotated box contact should include a contact point");
+    }
+
     private static void TestCapsuleOBBContactUsesSegmentBoxDistance()
     {
         quaternion rotation = quaternion.RotateZ(math.PI * fix._0_25);
@@ -441,6 +531,29 @@ internal static class Program
         world.Update();
 
         AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestContactManifoldMatchesPersistentAnchors()
+    {
+        ContactManifold manifold = new ContactManifold();
+        CollisionInfo first = new CollisionInfo(1, 2)
+        {
+            normal = fix3.up,
+        };
+        first.AddContact(fix3.zero, new fix3(fix.Zero, -fix._0_1, fix.Zero), fix._0_1);
+
+        fix shift = fix._0_01 + fix._0_005;
+        CollisionInfo shifted = new CollisionInfo(1, 2)
+        {
+            normal = fix3.up,
+        };
+        shifted.AddContact(new fix3(shift, fix.Zero, fix.Zero), new fix3(shift, -fix._0_1, fix.Zero), fix._0_1);
+
+        manifold.Update(first, false, 1);
+        manifold.Update(shifted, false, 2);
+
+        AssertEqual(1, manifold.contactCount);
+        AssertEqual(2, manifold[0].lifetime);
     }
 
     private static void TestContactSolverPreservesWarmStartImpulses()
@@ -484,6 +597,137 @@ internal static class Program
         AssertEqual(new fix3(2, 0, 0), syncedRigid.velocity);
     }
 
+    private static void TestWorldFixedStepAccumulatorAdvancesDeterministically()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.timeStep = fix._0_5;
+        World world = new World(settings);
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetVelocity(rigid.id, new fix3(2, 0, 0));
+
+        AssertEqual(0, world.Step(fix._0_25));
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "entity should exist before fixed step");
+        AssertEqual(fix3.zero, entity.translation);
+        AssertEqual(fix._0_25, world.FixedTimeAccumulator);
+
+        AssertEqual(1, world.Step(fix._0_25));
+
+        AssertTrue(world.TryGetEntity(rigid.id, out entity), "entity should exist after fixed step");
+        AssertEqual(new fix3(1, 0, 0), entity.translation);
+        AssertEqual(fix.Zero, world.FixedTimeAccumulator);
+        AssertEqual(1UL, world.FixedStepCount);
+    }
+
+    private static void TestWorldStateHashIsReplayDeterministic()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.timeStep = fix._0_25;
+        World world0 = CreateReplayHashWorld(settings);
+        World world1 = CreateReplayHashWorld(settings);
+
+        for (int i = 0; i < 4; i++)
+        {
+            world0.Step(fix._0_25 / 2);
+            world0.Step(fix._0_25 / 2);
+            world1.Step(fix._0_25);
+        }
+
+        AssertEqual(world0.ComputeStateHash(), world1.ComputeStateHash());
+
+        world1.AddForce(10000000, fix3.right);
+        world1.Step(fix._0_25);
+        AssertTrue(world0.ComputeStateHash() != world1.ComputeStateHash(), "hash should change after divergent replay input");
+    }
+
+    private static World CreateReplayHashWorld(WorldSettings settings)
+    {
+        World world = new World(settings);
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        world.AddSphereCollider(rigid.id, fix3.zero, fix.One);
+        world.SetVelocity(rigid.id, new fix3(1, 0, 0));
+        return world;
+    }
+
+    private static void TestWorldStateHashIncludesConstraintParameters()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        World world0 = CreateConstraintHashWorld(settings, new fix(2));
+        World world1 = CreateConstraintHashWorld(settings, new fix(3));
+
+        AssertTrue(world0.ComputeStateHash() != world1.ComputeStateHash(), "state hash should include constraint parameters");
+    }
+
+    private static World CreateConstraintHashWorld(WorldSettings settings, fix distance)
+    {
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+        world.CreateDistanceConstraint(rigid0.id, rigid1.id, distance);
+        return world;
+    }
+
+    private static void TestWorldLongReplayHashIsDeterministic()
+    {
+        WorldSettings settings = new WorldSettings(true, -10);
+        settings.timeStep = fix.One / 60;
+        settings.solverIterations = 4;
+        settings.positionIterations = 2;
+        settings.enableCCD = true;
+        settings.enableDynamicCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        World world0 = CreateLongReplayWorld(settings);
+        World world1 = CreateLongReplayWorld(settings);
+
+        ulong hash0 = 0;
+        ulong hash1 = 0;
+        for (int frame = 0; frame < 120; frame++)
+        {
+            ApplyReplayInputs(world0, frame);
+            ApplyReplayInputs(world1, frame);
+            hash0 = world0.StepAndComputeStateHash(settings.timeStep);
+            hash1 = world1.StepAndComputeStateHash(settings.timeStep);
+            AssertEqual(hash0, hash1);
+        }
+
+        AssertTrue(hash0 != 0 && hash1 != 0, "long replay hash should be non-zero");
+    }
+
+    private static World CreateLongReplayWorld(WorldSettings settings)
+    {
+        World world = new World(settings);
+        Rigid floor = world.CreateRigid(new fix3(fix.Zero, -fix._0_5, fix.Zero), quaternion.identity);
+        Rigid box = world.CreateRigid(new fix3(0, 2, 0), quaternion.identity);
+        Rigid sphere = world.CreateRigid(new fix3(-2, 3, 0), quaternion.identity);
+        Rigid slider = world.CreateRigid(new fix3(2, 2, 0), quaternion.identity);
+        world.AddAABBCollider(floor.id, fix3.zero, new fix3(8, 1, 8));
+        world.AddAABBCollider(box.id, fix3.zero, new fix3(1, 1, 1));
+        world.AddSphereCollider(sphere.id, fix3.zero, fix._0_5);
+        world.AddSphereCollider(slider.id, fix3.zero, fix._0_5);
+        world.SetRigidType(floor.id, RigidType.Static);
+        world.CreateDistanceConstraint(box.id, sphere.id, new fix(2));
+        world.CreateSliderConstraint(floor.id, slider.id, new fix3(2, 0, 0), fix3.zero, fix3.right, fix3.right);
+        return world;
+    }
+
+    private static void ApplyReplayInputs(World world, int frame)
+    {
+        if (frame % 15 == 0)
+        {
+            world.AddForce(10000001, new fix3(4, 0, 0));
+        }
+
+        if (frame % 20 == 5)
+        {
+            world.AddForce(10000002, new fix3(-3, 2, 0));
+        }
+
+        if (frame == 40)
+        {
+            world.SetVelocity(10000003, new fix3(-8, 0, 0));
+        }
+    }
+
     private static void TestWorldResolvesCollisionImpulse()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -514,6 +758,8 @@ internal static class Program
         Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
         world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
         world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        world.SetMass(rigid0.id, fix.One);
+        world.SetMass(rigid1.id, fix.One);
 
         world.Update(fix.Zero);
 
@@ -521,6 +767,61 @@ internal static class Program
         AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second entity should exist");
         AssertNear(new fix3(-fix._0_25, fix.Zero, fix.Zero), entity0.translation, fix._0_0001);
         AssertNear(new fix3(fix._1_5 + fix._0_25, fix.Zero, fix.Zero), entity1.translation, fix._0_0001);
+    }
+
+    private static void TestPositionCorrectionCanBeClamped()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.One;
+        settings.maxPositionCorrection = fix._0_1;
+        settings.penetrationSlop = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        world.SetMass(rigid0.id, fix.One);
+        world.SetMass(rigid1.id, fix.One);
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first clamped entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second clamped entity should exist");
+        AssertNear(new fix3(-fix._0_1, fix.Zero, fix.Zero), entity0.translation, fix._0_0001);
+        AssertNear(new fix3(fix._1_5 + fix._0_1, fix.Zero, fix.Zero), entity1.translation, fix._0_0001);
+    }
+
+    private static void TestStackedBoxesStaySeparatedUnderGravity()
+    {
+        WorldSettings settings = new WorldSettings(true, -10);
+        settings.timeStep = fix.One / 60;
+        settings.solverIterations = 8;
+        settings.positionIterations = 4;
+        settings.positionCorrectionPercent = fix._0_2;
+        settings.penetrationSlop = fix._0_01;
+        World world = new World(settings);
+
+        Rigid floor = world.CreateRigid(new fix3(fix.Zero, -fix._0_5, fix.Zero), quaternion.identity);
+        Rigid box0 = world.CreateRigid(new fix3(fix.Zero, fix._0_5, fix.Zero), quaternion.identity);
+        Rigid box1 = world.CreateRigid(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity);
+        Rigid box2 = world.CreateRigid(new fix3(fix.Zero, new fix(5) * fix._0_5, fix.Zero), quaternion.identity);
+        world.AddAABBCollider(floor.id, fix3.zero, new fix3(8, 1, 8));
+        world.AddAABBCollider(box0.id, fix3.zero, new fix3(1, 1, 1));
+        world.AddAABBCollider(box1.id, fix3.zero, new fix3(1, 1, 1));
+        world.AddAABBCollider(box2.id, fix3.zero, new fix3(1, 1, 1));
+        world.SetRigidType(floor.id, RigidType.Static);
+
+        for (int i = 0; i < 90; i++)
+        {
+            world.Step(settings.timeStep);
+        }
+
+        AssertTrue(world.TryGetEntity(box0.id, out Entity entity0), "bottom box should exist");
+        AssertTrue(world.TryGetEntity(box1.id, out Entity entity1), "middle box should exist");
+        AssertTrue(world.TryGetEntity(box2.id, out Entity entity2), "top box should exist");
+        AssertTrue(entity0.translation.y >= fix._0_25, "bottom box should stay above the floor");
+        AssertTrue(entity1.translation.y - entity0.translation.y >= fix._0_5, "middle box should stay above bottom box");
+        AssertTrue(entity2.translation.y - entity1.translation.y >= fix._0_5, "top box should stay above middle box");
     }
 
     private static void TestWorldDispatchesCollisionCallbacks()
@@ -862,6 +1163,106 @@ internal static class Program
         AssertFalse(world.TryGetRigid(rigid1.id, out Rigid _), "removed rigid should not be registered");
     }
 
+    private static void TestPointConstraintPinsAnchors()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+
+        PointConstraint constraint = world.CreatePointConstraint(rigid0.id, rigid1.id);
+        AssertTrue(constraint != null, "point constraint should be created");
+        AssertTrue(world.TryGetPointConstraint(constraint.id, out PointConstraint _), "point constraint should be queryable");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first point entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second point entity should exist");
+        AssertTrue(math.distance(entity0.translation, entity1.translation) <= fix._0_0001, "point constraint should pin anchors together");
+    }
+
+    private static void TestSpringDistanceConstraintPullsTowardRestLength()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+
+        SpringDistanceConstraint constraint = world.CreateSpringDistanceConstraint(
+            rigid0.id,
+            rigid1.id,
+            fix3.zero,
+            fix3.zero,
+            new fix(2),
+            fix.One,
+            fix.One);
+        AssertTrue(constraint != null, "spring distance constraint should be created");
+        AssertTrue(world.TryGetSpringDistanceConstraint(constraint.id, out SpringDistanceConstraint _), "spring distance constraint should be queryable");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first spring entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second spring entity should exist");
+        AssertTrue(math.abs(math.distance(entity0.translation, entity1.translation) - new fix(2)) <= fix._0_0001, "spring should correct toward rest length");
+    }
+
+    private static void TestHingeConstraintPinsAnchors()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(4, 0, 0), quaternion.identity);
+
+        HingeConstraint constraint = world.CreateHingeConstraint(rigid0.id, rigid1.id, fix3.zero, fix3.zero, fix3.up, fix3.up);
+        AssertTrue(constraint != null, "hinge constraint should be created");
+        AssertTrue(world.TryGetHingeConstraint(constraint.id, out HingeConstraint _), "hinge constraint should be queryable");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first hinge entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second hinge entity should exist");
+        AssertTrue(math.distance(entity0.translation, entity1.translation) <= fix._0_0001, "hinge should pin anchors together");
+    }
+
+    private static void TestFixedConstraintLocksRelativePose()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionIterations = 8;
+        World world = new World(settings);
+        quaternion targetRotation = quaternion.RotateZ(math.PI * fix._0_25);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(2, 0, 0), targetRotation);
+        world.SetRigidType(rigid0.id, RigidType.Static);
+
+        FixedConstraint constraint = world.CreateFixedConstraint(rigid0.id, rigid1.id, new fix3(2, 0, 0), fix3.zero);
+        AssertTrue(constraint != null, "fixed constraint should be created");
+        AssertTrue(world.TryGetFixedConstraint(constraint.id, out FixedConstraint _), "fixed constraint should be queryable");
+
+        world.SetTransform(rigid1.id, new fix3(4, 0, 0), quaternion.identity);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "fixed body should exist");
+        AssertNear(new fix3(2, 0, 0), entity1.translation, fix._0_01);
+        AssertNear(targetRotation * fix3.right, entity1.orientation * fix3.right, fix._0_1);
+    }
+
+    private static void TestSliderConstraintPreservesSlideAxis()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionIterations = 4;
+        World world = new World(settings);
+        Rigid rail = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid slider = world.CreateRigid(new fix3(4, 2, 0), quaternion.RotateZ(math.PI * fix._0_25));
+        world.SetRigidType(rail.id, RigidType.Static);
+
+        SliderConstraint constraint = world.CreateSliderConstraint(rail.id, slider.id, fix3.zero, fix3.zero, fix3.right, fix3.right);
+        AssertTrue(constraint != null, "slider constraint should be created");
+        AssertTrue(world.TryGetSliderConstraint(constraint.id, out SliderConstraint _), "slider constraint should be queryable");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(slider.id, out Entity sliderEntity), "slider entity should exist");
+        AssertNear(new fix3(4, 0, 0), sliderEntity.translation, fix._0_01);
+        AssertNear(fix3.right, sliderEntity.orientation * fix3.right, fix._0_1);
+    }
+
     private static void TestStaticRigidIgnoresMotionAndForces()
     {
         World world = new World(new WorldSettings(true, -10));
@@ -975,6 +1376,27 @@ internal static class Program
         AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
     }
 
+    private static void TestRestitutionThresholdSuppressesLowSpeedBounce()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix.Zero;
+        settings.restitution = fix.One;
+        settings.restitutionVelocityThreshold = fix._0_5;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid staticRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid dynamicRigid = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, fix3.left * fix._0_25);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic threshold rigid should exist");
+        AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
+    }
+
     private static void TestMaterialBouncinessAffectsRestitution()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1045,6 +1467,298 @@ internal static class Program
         AssertEqual(fix3.zero, syncedRigid.torque);
     }
 
+    private static void TestShapeAndConstraintFrameworksExposeCapabilities()
+    {
+        ShapeDescriptor sphere = PhysicsApi.GetShapeDescriptor(ShapeType.Sphere);
+        ShapeDescriptor triangleMesh = PhysicsApi.GetShapeDescriptor(ShapeType.TriangleMesh);
+        ConstraintDescriptor hinge = ConstraintRegistry.GetDescriptor(ConstraintType.Hinge);
+        ConstraintDescriptor sixDof = ConstraintRegistry.GetDescriptor(ConstraintType.SixDof);
+
+        AssertTrue(sphere.implemented, "sphere should be an implemented primitive shape");
+        AssertTrue((sphere.capabilities & ShapeCapabilities.ShapeCast) != 0, "sphere descriptor should expose shape cast support");
+        AssertFalse(triangleMesh.implemented, "triangle mesh should be framework-only for now");
+        AssertEqual((int)ShapeCategory.SceneGeometry, (int)triangleMesh.category);
+        AssertTrue(hinge.implemented, "hinge descriptor should be implemented");
+        AssertFalse(sixDof.implemented, "six dof descriptor should be framework-only for now");
+        AssertTrue(World.IsConstraintTypeImplemented(ConstraintType.Fixed), "world should expose implemented constraint types");
+    }
+
+    private static void TestPhysicsShapeCastReportsTimeOfImpact()
+    {
+        Sphere moving = new Sphere(fix3.zero, fix.One);
+        AABB target = new AABB(new fix3(5, 0, 0), new fix3(2, 2, 2));
+
+        bool hit = PhysicsApi.TryShapeCast(moving, target, new fix3(10, 0, 0), out ShapeCastHit hitInfo);
+
+        AssertTrue(hit, "shape cast should hit expanded target");
+        AssertEqual(new fix(3) / 10, hitInfo.fraction);
+        AssertEqual(fix3.right, hitInfo.normal);
+    }
+
+    private static void TestPhysicsShapeCastSweepsCapsuleTargets()
+    {
+        Sphere movingSphere = new Sphere(fix3.zero, fix._0_5);
+        Capsule targetCapsule = new Capsule(new fix3(5, 0, 0), fix._0_5, new fix(3), quaternion.identity, fix3.up);
+        Capsule movingCapsule = new Capsule(fix3.zero, fix._0_5, new fix(3), quaternion.identity, fix3.up);
+        AABB targetBox = new AABB(new fix3(5, 0, 0), new fix3(2, 2, 2));
+
+        AssertTrue(PhysicsApi.TryShapeCast(movingSphere, targetCapsule, new fix3(10, 0, 0), out ShapeCastHit sphereHit), "sphere should sweep against capsule");
+        AssertEqual(new fix(4) / 10, sphereHit.fraction);
+        AssertEqual(fix3.right, sphereHit.normal);
+
+        AssertTrue(PhysicsApi.TryShapeCast(movingCapsule, targetBox, new fix3(10, 0, 0), out ShapeCastHit capsuleHit), "capsule should sweep against box");
+        AssertEqual(new fix(7) / 20, capsuleHit.fraction);
+        AssertEqual(fix3.right, capsuleHit.normal);
+    }
+
+    private static void TestWorldClampsUnsafeMotionValues()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.maxLinearVelocity = fix.One;
+        settings.maxTranslationPerStep = fix._0_5;
+        World world = new World(settings);
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetVelocity(rigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "entity should exist");
+        AssertTrue(entity.translation.x <= fix._0_5, "translation should be clamped by per-step limit");
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        AssertTrue(syncedRigid.velocity.x <= fix._0_5, "velocity should be clamped for the step");
+
+        world.SetVelocity(rigid.id, new fix3(fix.NaN, fix.NaN, fix.NaN));
+        AssertTrue(world.TryGetRigid(rigid.id, out syncedRigid), "rigid should still exist");
+        AssertEqual(fix3.zero, syncedRigid.velocity);
+    }
+
+    private static void TestSolverClampsContactImpulses()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.maxContactImpulse = fix._0_5;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, new fix3(10, 0, 0));
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedRigid), "dynamic rigid should exist");
+        AssertTrue(syncedRigid.velocity.x >= new fix(9), "contact impulse clamp should limit solver velocity correction");
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.ContactManifolds[0][0].normalImpulse <= fix._0_5, "stored normal impulse should be clamped");
+    }
+
+    private static void TestContactManifoldSettingsControlPersistence()
+    {
+        ContactManifold manifold = new ContactManifold();
+        ContactManifoldSettings strictSettings = ContactManifoldSettings.Default;
+        strictSettings.anchorMatchDistance = fix._0_001;
+        strictSettings.positionMatchDistance = fix._0_001;
+
+        CollisionInfo first = new CollisionInfo(1, 2)
+        {
+            normal = fix3.up,
+        };
+        first.AddContact(fix3.zero, new fix3(fix.Zero, -fix._0_1, fix.Zero), fix._0_1);
+
+        CollisionInfo shifted = new CollisionInfo(1, 2)
+        {
+            normal = fix3.up,
+        };
+        shifted.AddContact(new fix3(fix._0_01, fix.Zero, fix.Zero), new fix3(fix._0_01, -fix._0_1, fix.Zero), fix._0_1);
+
+        manifold.Update(first, false, 1, strictSettings);
+        manifold.Update(shifted, false, 2, strictSettings);
+
+        AssertEqual(1, manifold.contactCount);
+        AssertEqual(1, manifold[0].lifetime);
+    }
+
+    private static void TestWorldReportsStepStatsAfterUpdate()
+    {
+        World world = new World(new WorldSettings(false));
+        world.Reserve(4, 4, 2);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        world.Update(fix.Zero);
+
+        AssertEqual(2, world.LastStepStats.activeColliderCount);
+        AssertEqual(1, world.LastStepStats.broadphasePairCount);
+        AssertEqual(2, world.LastStepStats.broadphaseProxyCount);
+        AssertTrue(world.LastStepStats.broadphaseTreeHeight > 0, "broadphase tree height should be reported");
+        AssertEqual(1, world.LastStepStats.contactManifoldCount);
+        AssertEqual(1, world.LastStepStats.islandCount);
+    }
+
+    private static void TestWorldWarmUpdateAllocationBaselineStaysLow()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        world.Reserve(4, 4, 1);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(3, 0, 0), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        world.Update(fix.Zero);
+        world.Update(fix.Zero);
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        world.Update(fix.Zero);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        AssertTrue(allocated <= 1024, $"warm stationary update allocation baseline regressed, got {allocated}");
+    }
+
+    private static void TestCollisionCallbackLifecycleChangesAreDeferredSafely()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int enterCount = 0;
+
+        collider0.OnCollisionEnter += collision =>
+        {
+            enterCount++;
+            AssertTrue(world.TryGetRigid(rigid1.id, out Rigid _), "rigid should still exist during callback");
+            AssertTrue(world.RemoveRigid(rigid1.id), "callback rigid removal should be queued");
+            AssertTrue(world.TryGetRigid(rigid1.id, out Rigid _), "queued rigid removal should not mutate during callback");
+        };
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, enterCount);
+        AssertFalse(world.TryGetRigid(rigid1.id, out Rigid _), "queued rigid should be removed after callbacks");
+        AssertFalse(world.TryGetCollider(collider1.id, out Collider _), "queued rigid collider should be removed after callbacks");
+        AssertTrue(world.TryGetCollider(collider0.id, out Collider _), "unrelated collider should remain");
+        AssertEqual(1, world.LastStepStats.deferredLifecycleOperationCount);
+    }
+
+    private static void TestCollisionCallbackExceptionsCanBeCaptured()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.catchCallbackExceptions = true;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int rigidCallbackCount = 0;
+
+        collider0.OnCollisionEnter += collision => throw new InvalidOperationException("callback failure");
+        rigid0.OnCollisionEnter += collision => rigidCallbackCount++;
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.LastStepStats.callbackExceptionCount);
+        AssertTrue(world.LastCallbackException is InvalidOperationException, "last callback exception should be captured");
+        AssertEqual(1, rigidCallbackCount);
+    }
+
+    private static void TestCCDStopsFastBodyBeforeStaticCollider()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix._0_5);
+        world.AddAABBCollider(staticRigid.id, fix3.zero, new fix3(1, 4, 4));
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(dynamicRigid.id, out Entity entity), "dynamic entity should exist");
+        AssertNear(new fix3(4, 0, 0), entity.translation, fix._0_0001);
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedRigid), "dynamic rigid should exist");
+        AssertEqual(fix.Zero, syncedRigid.velocity.x);
+        AssertTrue(entity.translation.x < new fix(4) + fix._0_5, "CCD should keep the dynamic body before the wall");
+    }
+
+    private static void TestCCDSweepsCapsuleAgainstStaticCollider()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        world.AddCapsuleCollider(dynamicRigid.id, fix3.zero, fix._0_5, new fix(3), quaternion.identity);
+        world.AddAABBCollider(staticRigid.id, fix3.zero, new fix3(1, 4, 4));
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(dynamicRigid.id, out Entity entity), "dynamic capsule entity should exist");
+        AssertNear(new fix3(4, 0, 0), entity.translation, fix._0_0001);
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedRigid), "dynamic capsule rigid should exist");
+        AssertEqual(fix.Zero, syncedRigid.velocity.x);
+    }
+
+    private static void TestCCDSweepsSphereAgainstSphere()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(4, 3, 0), quaternion.identity);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix._0_5);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix._0_5);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, new fix3(8, 6, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(dynamicRigid.id, out Entity entity), "dynamic sphere entity should exist");
+        AssertNear(new fix3(new fix(16) / 5, new fix(12) / 5, fix.Zero), entity.translation, fix._0_01);
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedRigid), "dynamic sphere rigid should exist");
+        AssertNear(fix3.zero, syncedRigid.velocity, fix._0_01);
+    }
+
+    private static void TestCCDSweepsDynamicSphereAgainstDynamicSphere()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.enableCCD = true;
+        settings.enableDynamicCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid movingRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid targetRigid = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        world.AddSphereCollider(movingRigid.id, fix3.zero, fix._0_5);
+        world.AddSphereCollider(targetRigid.id, fix3.zero, fix._0_5);
+
+        world.SetVelocity(movingRigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(movingRigid.id, out Entity movingEntity), "moving dynamic CCD entity should exist");
+        AssertNear(new fix3(4, 0, 0), movingEntity.translation, fix._0_0001);
+        AssertTrue(world.TryGetEntity(targetRigid.id, out Entity targetEntity), "target dynamic CCD entity should exist");
+        AssertEqual(new fix3(5, 0, 0), targetEntity.translation);
+        AssertTrue(world.TryGetRigid(movingRigid.id, out Rigid syncedRigid), "moving dynamic CCD rigid should exist");
+        AssertEqual(fix.Zero, syncedRigid.velocity.x);
+    }
+
     private static void TestOffCenterContactAppliesAngularImpulse()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1107,6 +1821,107 @@ internal static class Program
         AssertEqual(manualInertia, syncedRigid.inertia);
     }
 
+    private static void TestRigidSupportsMultipleColliders()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid compoundRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid otherRigid = world.CreateRigid(new fix3(3, 0, 0), quaternion.identity);
+        Collider left = world.AddSphereCollider(compoundRigid.id, new fix3(-2, 0, 0), fix.One);
+        Collider right = world.AddSphereCollider(compoundRigid.id, new fix3(2, 0, 0), fix.One);
+        Collider other = world.AddSphereCollider(otherRigid.id, fix3.zero, fix.One);
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(compoundRigid.id, out Rigid syncedRigid), "compound rigid should exist");
+        AssertEqual(2, syncedRigid.colliderCount);
+        AssertEqual(left.id, syncedRigid.colliderId);
+        AssertTrue(syncedRigid.ContainsCollider(left.id), "left collider should be registered on rigid");
+        AssertTrue(syncedRigid.ContainsCollider(right.id), "right collider should be registered on rigid");
+        AssertEqual(1, world.BroadphasePairs.Count);
+        AssertEqual(right.id, world.BroadphasePairs[0].colliderId0);
+        AssertEqual(other.id, world.BroadphasePairs[0].colliderId1);
+
+        AssertTrue(world.RemoveCollider(left.id), "first collider removal should succeed");
+        AssertTrue(world.TryGetRigid(compoundRigid.id, out syncedRigid), "compound rigid should still exist");
+        AssertEqual(1, syncedRigid.colliderCount);
+        AssertEqual(right.id, syncedRigid.colliderId);
+        AssertFalse(world.TryGetCollider(left.id, out Collider _), "removed collider should not be registered");
+        AssertTrue(world.TryGetCollider(right.id, out Collider _), "remaining collider should stay registered");
+    }
+
+    private static void TestCompoundBodyAggregatesAutomaticMassProperties()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Collider left = world.AddAABBCollider(rigid.id, new fix3(-1, 0, 0), new fix3(2, 2, 2));
+        Collider right = world.AddAABBCollider(rigid.id, new fix3(1, 0, 0), new fix3(2, 2, 2));
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "compound rigid should exist");
+        fix baseInertia = new fix(64) / 12;
+        AssertEqual(new fix(16), syncedRigid.mass);
+        AssertEqual(new fix3(baseInertia * 2, baseInertia * 2 + 16, baseInertia * 2 + 16), syncedRigid.inertia);
+
+        AssertTrue(world.RemoveCollider(left.id), "left collider removal should succeed");
+        AssertTrue(world.TryGetRigid(rigid.id, out syncedRigid), "compound rigid should still exist");
+        AssertEqual(new fix(8), syncedRigid.mass);
+        AssertEqual(new fix3(baseInertia, baseInertia + 8, baseInertia + 8), syncedRigid.inertia);
+
+        world.SetColliderDensity(right.id, fix._2);
+        AssertTrue(world.TryGetRigid(rigid.id, out syncedRigid), "compound rigid should still exist after density change");
+        AssertEqual(new fix(16), syncedRigid.mass);
+        AssertEqual(new fix3(baseInertia * 2, baseInertia * 2 + 16, baseInertia * 2 + 16), syncedRigid.inertia);
+    }
+
+    private static void TestWorldBuildsIslandsFromContactsAndConstraints()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Rigid rigid2 = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid2.id, fix3.zero, fix.One);
+
+        DistanceConstraint constraint = world.CreateDistanceConstraint(rigid1.id, rigid2.id);
+        AssertTrue(constraint != null, "distance constraint should be created");
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.Islands.Count);
+        AssertEqual(3, world.Islands[0].RigidIds.Count);
+        AssertTrue(ContainsRigidId(world.Islands[0].RigidIds, rigid0.id), "contact body should be in island");
+        AssertTrue(ContainsRigidId(world.Islands[0].RigidIds, rigid1.id), "shared body should be in island");
+        AssertTrue(ContainsRigidId(world.Islands[0].RigidIds, rigid2.id), "constraint body should be in island");
+    }
+
+    private static void TestSleepingIslandSkipsIntegrationAndWakes()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.sleepTime = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        world.AddSphereCollider(rigid.id, fix3.zero, fix.One);
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid sleepingRigid), "rigid should exist");
+        AssertTrue(sleepingRigid.isSleeping, "resting rigid should sleep immediately when sleepTime is zero");
+        AssertEqual(1, world.Islands.Count);
+        AssertTrue(world.Islands[0].sleeping, "single body island should be marked sleeping");
+
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "sleeping entity should exist");
+        AssertEqual(fix3.zero, entity.translation);
+
+        world.AddForce(rigid.id, fix3.right);
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid awakeRigid), "rigid should still exist");
+        AssertFalse(awakeRigid.isSleeping, "external force should wake a sleeping rigid");
+        AssertTrue(awakeRigid.velocity.x > fix.Zero, "force should affect velocity after waking");
+    }
+
     private static void Run(string name, Action test)
     {
         try
@@ -1126,6 +1941,19 @@ internal static class Program
         for (int i = 0; i < colliders.Count; i++)
         {
             if (colliders[i].id == colliderId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsRigidId(IReadOnlyList<ulong> rigidIds, ulong rigidId)
+    {
+        for (int i = 0; i < rigidIds.Count; i++)
+        {
+            if (rigidIds[i] == rigidId)
             {
                 return true;
             }

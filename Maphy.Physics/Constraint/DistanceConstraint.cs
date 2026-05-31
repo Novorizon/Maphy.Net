@@ -4,6 +4,9 @@ namespace Maphy.Physics
 {
     public sealed class DistanceConstraint : Constraint
     {
+        public override ConstraintType Type => ConstraintType.Distance;
+        public override ConstraintCapabilities Capabilities => ConstraintCapabilities.LinearLimit;
+
         public fix3 localAnchor0 { get; private set; }
         public fix3 localAnchor1 { get; private set; }
         public fix distance { get; private set; }
@@ -51,7 +54,7 @@ namespace Maphy.Physics
                 data.rigid1,
                 data.inverseMass1,
                 data.relativeAnchor1,
-                data.axis * accumulatedImpulse);
+                data.axis * (accumulatedImpulse * context.warmStartScale));
         }
 
         internal override void SolveVelocity(SolverContext context)

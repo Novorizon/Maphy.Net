@@ -127,6 +127,8 @@ namespace Maphy.Physics
         public IReadOnlyList<BroadphaseProxy> Proxies => proxies;
         public IReadOnlyList<BroadCollisionPair> Pairs => broadCollisionPairs;
         public int TreeProxyCount => tree.ProxyCount;
+        public int TreeHeight => tree.Height;
+        public int TreeMaxBalance => tree.MaxBalance;
 
         public void Clear()
         {
@@ -155,7 +157,23 @@ namespace Maphy.Physics
 
         public IReadOnlyList<BroadCollisionPair> Collision(IEnumerable<Collider> colliders)
         {
+            if (colliders is IReadOnlyList<Collider> list)
+            {
+                return Collision(list);
+            }
+
             SyncProxies(colliders);
+            return BuildPairs();
+        }
+
+        public IReadOnlyList<BroadCollisionPair> Collision(IReadOnlyList<Collider> colliders)
+        {
+            SyncProxies(colliders);
+            return BuildPairs();
+        }
+
+        private IReadOnlyList<BroadCollisionPair> BuildPairs()
+        {
             broadCollisionPairs.Clear();
             pairKeys.Clear();
             sortedPairKeys.Clear();
@@ -307,12 +325,40 @@ namespace Maphy.Physics
 
         private void SyncProxies(IEnumerable<Collider> colliders)
         {
+            if (colliders is IReadOnlyList<Collider> list)
+            {
+                SyncProxies(list);
+                return;
+            }
+
             proxies.Clear();
             proxiesById.Clear();
             activeColliderIds.Clear();
 
             foreach (Collider collider in colliders)
             {
+                if (collider.enabled && collider.shape != null)
+                {
+                    BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));
+                    proxies.Add(proxy);
+                    proxiesById[proxy.colliderId] = proxy;
+                    activeColliderIds.Add(proxy.colliderId);
+                    tree.MoveProxy(proxy);
+                }
+            }
+
+            tree.RemoveExcept(activeColliderIds, staleColliderIds);
+        }
+
+        private void SyncProxies(IReadOnlyList<Collider> colliders)
+        {
+            proxies.Clear();
+            proxiesById.Clear();
+            activeColliderIds.Clear();
+
+            for (int i = 0; i < colliders.Count; i++)
+            {
+                Collider collider = colliders[i];
                 if (collider.enabled && collider.shape != null)
                 {
                     BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));

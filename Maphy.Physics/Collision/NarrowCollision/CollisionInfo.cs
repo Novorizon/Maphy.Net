@@ -7,19 +7,26 @@ namespace Maphy.Physics
         public fix3 pointOnCollider0;
         public fix3 pointOnCollider1;
         public fix penetrationDepth;
+        public int featureId;
 
         public CollisionContact(fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth)
+            : this(pointOnCollider0, pointOnCollider1, penetrationDepth, 0)
+        {
+        }
+
+        public CollisionContact(fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth, int featureId)
         {
             this.pointOnCollider0 = pointOnCollider0;
             this.pointOnCollider1 = pointOnCollider1;
             this.penetrationDepth = penetrationDepth;
+            this.featureId = featureId;
         }
 
         public fix3 position => (pointOnCollider0 + pointOnCollider1) * fix._0_5;
 
         public CollisionContact Flipped()
         {
-            return new CollisionContact(pointOnCollider1, pointOnCollider0, penetrationDepth);
+            return new CollisionContact(pointOnCollider1, pointOnCollider0, penetrationDepth, featureId);
         }
     }
 
@@ -150,7 +157,12 @@ namespace Maphy.Physics
 
         public bool AddContact(fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth)
         {
-            return AddContact(new CollisionContact(pointOnCollider0, pointOnCollider1, penetrationDepth));
+            return AddContact(pointOnCollider0, pointOnCollider1, penetrationDepth, 0);
+        }
+
+        public bool AddContact(fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth, int featureId)
+        {
+            return AddContact(new CollisionContact(pointOnCollider0, pointOnCollider1, penetrationDepth, featureId));
         }
 
         public bool AddContact(CollisionContact contact)
