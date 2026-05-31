@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
@@ -142,26 +143,10 @@ namespace Maphy.Physics
 
         public IReadOnlyList<BroadCollisionPair> Collision(IEnumerable<Collider> colliders)
         {
-            proxies.Clear();
+            SyncProxies(colliders);
             broadCollisionPairs.Clear();
-            proxiesById.Clear();
-            activeColliderIds.Clear();
             pairKeys.Clear();
             sortedPairKeys.Clear();
-
-            foreach (Collider collider in colliders)
-            {
-                if (collider.shape != null)
-                {
-                    BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));
-                    proxies.Add(proxy);
-                    proxiesById[proxy.colliderId] = proxy;
-                    activeColliderIds.Add(proxy.colliderId);
-                    tree.MoveProxy(proxy);
-                }
-            }
-
-            tree.RemoveExcept(activeColliderIds, staleColliderIds);
 
             for (int i = 0; i < proxies.Count; i++)
             {
@@ -194,6 +179,73 @@ namespace Maphy.Physics
             return broadCollisionPairs;
         }
 
+        public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, List<Collider> results)
+        {
+            if (results == null)
+            {
+                return;
+            }
+
+            SyncProxies(colliders);
+            results.Clear();
+            queryResults.Clear();
+            tree.Query(bounds, queryResults);
+            for (int i = 0; i < queryResults.Count; i++)
+            {
+                BroadphaseProxy proxy = queryResults[i];
+                if (Physics.IsOverlap(proxy.bounds, bounds))
+                {
+                    results.Add(proxy.collider);
+                }
+            }
+        }
+
+        public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, out RaycastHit hitInfo)
+        {
+            hitInfo = default;
+            if (maxDistance < fix.Zero)
+            {
+                return false;
+            }
+
+            SyncProxies(colliders);
+            queryResults.Clear();
+            tree.Raycast(ray, maxDistance, queryResults);
+
+            bool hasHit = false;
+            fix bestDistance = maxDistance;
+            ulong bestColliderId = ulong.MaxValue;
+            for (int i = 0; i < queryResults.Count; i++)
+            {
+                BroadphaseProxy proxy = queryResults[i];
+                if (!Physics.TryRaycast(proxy.collider.shape, ray, maxDistance, out RaycastHit candidate))
+                {
+                    continue;
+                }
+
+                if (candidate.distance > bestDistance)
+                {
+                    continue;
+                }
+
+                if (candidate.distance == bestDistance && proxy.colliderId >= bestColliderId)
+                {
+                    continue;
+                }
+
+                candidate.id = proxy.colliderId <= long.MaxValue ? (long)proxy.colliderId : long.MaxValue;
+                candidate.colliderId = proxy.colliderId;
+                candidate.rigidId = proxy.rigidId;
+                candidate.collider = proxy.collider;
+                hitInfo = candidate;
+                hasHit = true;
+                bestDistance = candidate.distance;
+                bestColliderId = proxy.colliderId;
+            }
+
+            return hasHit;
+        }
+
         public bool IsBroadCollision(Collider a, Collider b)
         {
             if (a.id == b.id || a.shape == null || b.shape == null)
@@ -219,6 +271,27 @@ namespace Maphy.Physics
             }
 
             return Physics.IsOverlap(a.bounds, b.bounds);
+        }
+
+        private void SyncProxies(IEnumerable<Collider> colliders)
+        {
+            proxies.Clear();
+            proxiesById.Clear();
+            activeColliderIds.Clear();
+
+            foreach (Collider collider in colliders)
+            {
+                if (collider.shape != null)
+                {
+                    BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));
+                    proxies.Add(proxy);
+                    proxiesById[proxy.colliderId] = proxy;
+                    activeColliderIds.Add(proxy.colliderId);
+                    tree.MoveProxy(proxy);
+                }
+            }
+
+            tree.RemoveExcept(activeColliderIds, staleColliderIds);
         }
 
         private static int ComparePairKeys(BroadCollisionPairKey a, BroadCollisionPairKey b)

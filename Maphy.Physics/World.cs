@@ -337,6 +337,23 @@ namespace Maphy.Physics
             return collisionSystem.TryGetCollision(a, b, out collision);
         }
 
+        public void QueryAABB(AABB bounds, List<Collider> results)
+        {
+            SyncColliders();
+            collisionSystem.QueryAABB(colliders.Values, bounds, results);
+        }
+
+        public bool Raycast(Ray ray, out RaycastHit hitInfo, fix maxDistance)
+        {
+            SyncColliders();
+            return collisionSystem.Raycast(colliders.Values, ray, maxDistance, out hitInfo);
+        }
+
+        public bool Raycast(fix3 origin, fix3 direction, out RaycastHit hitInfo, fix maxDistance)
+        {
+            return Raycast(new Ray(origin, direction), out hitInfo, maxDistance);
+        }
+
         private void IntegrateForces(fix deltaTime)
         {
             for (int i = 0; i < rigidIds.Count; i++)

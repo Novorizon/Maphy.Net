@@ -157,6 +157,45 @@ namespace Maphy.Physics
             }
         }
 
+        public void Raycast(Ray ray, fix maxDistance, List<BroadphaseProxy> results)
+        {
+            if (results == null || root == NullNode || maxDistance < fix.Zero)
+            {
+                return;
+            }
+
+            if (!Physics.TryNormalizeRay(ray, out Ray normalizedRay))
+            {
+                return;
+            }
+
+            queryStack.Clear();
+            queryStack.Add(root);
+
+            while (queryStack.Count > 0)
+            {
+                int last = queryStack.Count - 1;
+                int nodeId = queryStack[last];
+                queryStack.RemoveAt(last);
+
+                Node node = nodes[nodeId];
+                if (!Physics.RaycastAABB(node.bounds, normalizedRay, maxDistance, out fix _))
+                {
+                    continue;
+                }
+
+                if (node.IsLeaf)
+                {
+                    results.Add(node.proxy);
+                }
+                else
+                {
+                    queryStack.Add(node.left);
+                    queryStack.Add(node.right);
+                }
+            }
+        }
+
         internal void RemoveExcept(HashSet<ulong> activeColliderIds, List<ulong> removedBuffer)
         {
             removedBuffer.Clear();

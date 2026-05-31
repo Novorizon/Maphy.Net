@@ -24,6 +24,9 @@ internal static class Program
         Run("world update syncs collider transform", TestWorldTransformSync);
         Run("broadphase tree updates moving pairs", TestBroadphaseTreeUpdatesMovingPairs);
         Run("broadphase removes stale tree proxies", TestBroadphaseRemovesStaleTreeProxies);
+        Run("world AABB query uses broadphase tree", TestWorldAABBQueryUsesBroadphaseTree);
+        Run("physics raycast hits supported shapes", TestPhysicsRaycastHitsSupportedShapes);
+        Run("world raycast returns nearest hit", TestWorldRaycastReturnsNearestHit);
         Run("world builds contact manifolds", TestWorldContactManifolds);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
@@ -236,6 +239,73 @@ internal static class Program
 
         AssertEqual(0, broadphase.TreeProxyCount);
         AssertEqual(0, broadphase.Pairs.Count);
+    }
+
+    private static void TestWorldAABBQueryUsesBroadphaseTree()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(6, 0, 0), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        List<Collider> results = new List<Collider>();
+
+        world.QueryAABB(new AABB(fix3.zero, new fix3(4, 4, 4)), results);
+
+        AssertEqual(1, results.Count);
+        AssertTrue(ContainsCollider(results, collider0.id), "query should include first collider");
+
+        world.SetTranslation(rigid1.id, new fix3(fix._1_5, fix.Zero, fix.Zero));
+        world.QueryAABB(new AABB(fix3.zero, new fix3(4, 4, 4)), results);
+
+        AssertEqual(2, results.Count);
+        AssertTrue(ContainsCollider(results, collider0.id), "query should include first collider after move");
+        AssertTrue(ContainsCollider(results, collider1.id), "query should include moved collider");
+    }
+
+    private static void TestPhysicsRaycastHitsSupportedShapes()
+    {
+        Ray ray = new Ray(fix3.zero, fix3.right);
+
+        AssertTrue(PhysicsApi.TryRaycast(new Sphere(new fix3(5, 0, 0), fix.One), ray, 10, out RaycastHit sphereHit), "ray should hit sphere");
+        AssertEqual(new fix(4), sphereHit.distance);
+        AssertEqual(new fix3(4, 0, 0), sphereHit.point);
+
+        AssertTrue(PhysicsApi.TryRaycast(new AABB(new fix3(5, 0, 0), new fix3(2, 2, 2)), ray, 10, out RaycastHit aabbHit), "ray should hit AABB");
+        AssertEqual(new fix(4), aabbHit.distance);
+        AssertEqual(fix3.left, aabbHit.normal);
+
+        AssertTrue(PhysicsApi.TryRaycast(new AABB(new fix3(5, 0, 0), new fix3(2, 2, 2)), new Ray(new fix3(10, 0, 0), fix3.left), 10, out RaycastHit reverseAabbHit), "reverse ray should hit AABB");
+        AssertEqual(new fix(4), reverseAabbHit.distance);
+        AssertEqual(fix3.right, reverseAabbHit.normal);
+
+        AssertTrue(PhysicsApi.TryRaycast(new OBB(new fix3(5, 0, 0), new fix3(2, 2, 2), quaternion.identity), ray, 10, out RaycastHit obbHit), "ray should hit OBB");
+        AssertEqual(new fix(4), obbHit.distance);
+
+        Capsule capsule = new Capsule(new fix3(5, 0, 0), fix.One, 4, quaternion.identity, fix3.up);
+        AssertTrue(PhysicsApi.TryRaycast(capsule, ray, 10, out RaycastHit capsuleHit), "ray should hit capsule");
+        AssertEqual(new fix(4), capsuleHit.distance);
+    }
+
+    private static void TestWorldRaycastReturnsNearestHit()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid farRigid = world.CreateRigid(new fix3(8, 0, 0), quaternion.identity);
+        Rigid nearRigid = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        Collider farCollider = world.AddSphereCollider(farRigid.id, fix3.zero, fix.One);
+        Collider nearCollider = world.AddSphereCollider(nearRigid.id, fix3.zero, fix.One);
+
+        AssertTrue(world.Raycast(fix3.zero, fix3.right * fix._2, out RaycastHit hit, 10), "world raycast should hit nearest sphere");
+        AssertEqual(nearCollider.id, hit.colliderId);
+        AssertEqual(nearRigid.id, hit.rigidId);
+        AssertEqual(new fix(4), hit.distance);
+        AssertEqual(new fix3(4, 0, 0), hit.point);
+
+        world.SetTranslation(nearRigid.id, new fix3(12, 0, 0));
+
+        AssertTrue(world.Raycast(fix3.zero, fix3.right, out hit, 10), "world raycast should hit far sphere after moving nearest away");
+        AssertEqual(farCollider.id, hit.colliderId);
+        AssertEqual(new fix(7), hit.distance);
     }
 
     private static void TestWorldContactManifolds()
@@ -605,6 +675,19 @@ internal static class Program
         {
             throw new InvalidOperationException($"FAIL {name}: {ex.Message}", ex);
         }
+    }
+
+    private static bool ContainsCollider(List<Collider> colliders, ulong colliderId)
+    {
+        for (int i = 0; i < colliders.Count; i++)
+        {
+            if (colliders[i].id == colliderId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AssertTrue(bool condition, string message)

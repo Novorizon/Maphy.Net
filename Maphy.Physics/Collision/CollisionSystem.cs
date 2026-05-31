@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
@@ -17,6 +18,16 @@ namespace Maphy.Physics
             IReadOnlyList<BroadCollisionPair> pairs = broadphase.Collision(colliders);
             narrowphase.Collision(pairs);
             contactCache.Update(narrowphase.CollisionPairs);
+        }
+
+        public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, List<Collider> results)
+        {
+            broadphase.QueryAABB(colliders, bounds, results);
+        }
+
+        public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, out RaycastHit hitInfo)
+        {
+            return broadphase.Raycast(colliders, ray, maxDistance, out hitInfo);
         }
 
         public bool TestCollision(Collider a, Collider b)
