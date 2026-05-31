@@ -141,6 +141,18 @@ namespace Maphy.Physics
             sortedPairKeys.Clear();
         }
 
+        public bool RemoveCollider(ulong colliderId)
+        {
+            bool removed = tree.RemoveProxy(colliderId);
+            removed |= proxiesById.Remove(colliderId);
+            removed |= activeColliderIds.Remove(colliderId);
+            removed |= proxies.RemoveAll(proxy => proxy.colliderId == colliderId) > 0;
+            removed |= broadCollisionPairs.RemoveAll(pair => ContainsCollider(pair.key, colliderId)) > 0;
+            pairKeys.RemoveWhere(key => ContainsCollider(key, colliderId));
+            sortedPairKeys.RemoveAll(key => ContainsCollider(key, colliderId));
+            return removed;
+        }
+
         public IReadOnlyList<BroadCollisionPair> Collision(IEnumerable<Collider> colliders)
         {
             SyncProxies(colliders);
@@ -263,7 +275,7 @@ namespace Maphy.Physics
 
         public bool IsBroadCollision(Collider a, Collider b)
         {
-            if (a.id == b.id || a.shape == null || b.shape == null)
+            if (a == null || b == null || a.id == b.id || !a.enabled || !b.enabled || a.shape == null || b.shape == null)
             {
                 return false;
             }
@@ -301,7 +313,7 @@ namespace Maphy.Physics
 
             foreach (Collider collider in colliders)
             {
-                if (collider.shape != null)
+                if (collider.enabled && collider.shape != null)
                 {
                     BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));
                     proxies.Add(proxy);
@@ -318,6 +330,11 @@ namespace Maphy.Physics
         {
             int first = a.colliderId0.CompareTo(b.colliderId0);
             return first != 0 ? first : a.colliderId1.CompareTo(b.colliderId1);
+        }
+
+        private static bool ContainsCollider(BroadCollisionPairKey key, ulong colliderId)
+        {
+            return key.colliderId0 == colliderId || key.colliderId1 == colliderId;
         }
     }
 }
