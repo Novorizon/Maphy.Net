@@ -25,9 +25,19 @@ namespace Maphy.Physics
             broadphase.QueryAABB(colliders, bounds, results);
         }
 
+        public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, int layerMask, List<Collider> results)
+        {
+            broadphase.QueryAABB(colliders, bounds, layerMask, results);
+        }
+
         public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, out RaycastHit hitInfo)
         {
             return broadphase.Raycast(colliders, ray, maxDistance, out hitInfo);
+        }
+
+        public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, int layerMask, out RaycastHit hitInfo)
+        {
+            return broadphase.Raycast(colliders, ray, maxDistance, layerMask, out hitInfo);
         }
 
         public bool TestCollision(Collider a, Collider b)

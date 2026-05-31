@@ -253,10 +253,59 @@ namespace Maphy.Physics
                 normal = delta.z >= fix.Zero ? fix3.forward : fix3.backward;
             }
 
-            fix3 contactPoint1 = GetSupportPointOnShape(shape0, normal);
-            fix3 contactPoint2 = GetSupportPointOnShape(shape1, -normal);
-            collision = new CollisionInfo(penetrationDepth, normal, contactPoint1, contactPoint2);
+            collision = new CollisionInfo(0, 0)
+            {
+                penetrationDepth = penetrationDepth,
+                normal = normal,
+            };
+
+            AddBoundsFaceContacts(bounds0, bounds1, normal, penetrationDepth, ref collision);
+            if (!collision.hasContact)
+            {
+                collision.AddContact(GetSupportPointOnShape(shape0, normal), GetSupportPointOnShape(shape1, -normal), penetrationDepth);
+            }
+
             return true;
+        }
+
+        private static void AddBoundsFaceContacts(AABB bounds0, AABB bounds1, fix3 normal, fix penetrationDepth, ref CollisionInfo collision)
+        {
+            fix3 min = math.max(bounds0.min, bounds1.min);
+            fix3 max = math.min(bounds0.max, bounds1.max);
+
+            if (normal.x != fix.Zero)
+            {
+                fix x0 = normal.x > fix.Zero ? bounds0.max.x : bounds0.min.x;
+                fix x1 = normal.x > fix.Zero ? bounds1.min.x : bounds1.max.x;
+                AddContact(ref collision, new fix3(x0, min.y, min.z), new fix3(x1, min.y, min.z), penetrationDepth);
+                AddContact(ref collision, new fix3(x0, min.y, max.z), new fix3(x1, min.y, max.z), penetrationDepth);
+                AddContact(ref collision, new fix3(x0, max.y, min.z), new fix3(x1, max.y, min.z), penetrationDepth);
+                AddContact(ref collision, new fix3(x0, max.y, max.z), new fix3(x1, max.y, max.z), penetrationDepth);
+                return;
+            }
+
+            if (normal.y != fix.Zero)
+            {
+                fix y0 = normal.y > fix.Zero ? bounds0.max.y : bounds0.min.y;
+                fix y1 = normal.y > fix.Zero ? bounds1.min.y : bounds1.max.y;
+                AddContact(ref collision, new fix3(min.x, y0, min.z), new fix3(min.x, y1, min.z), penetrationDepth);
+                AddContact(ref collision, new fix3(min.x, y0, max.z), new fix3(min.x, y1, max.z), penetrationDepth);
+                AddContact(ref collision, new fix3(max.x, y0, min.z), new fix3(max.x, y1, min.z), penetrationDepth);
+                AddContact(ref collision, new fix3(max.x, y0, max.z), new fix3(max.x, y1, max.z), penetrationDepth);
+                return;
+            }
+
+            fix z0 = normal.z > fix.Zero ? bounds0.max.z : bounds0.min.z;
+            fix z1 = normal.z > fix.Zero ? bounds1.min.z : bounds1.max.z;
+            AddContact(ref collision, new fix3(min.x, min.y, z0), new fix3(min.x, min.y, z1), penetrationDepth);
+            AddContact(ref collision, new fix3(min.x, max.y, z0), new fix3(min.x, max.y, z1), penetrationDepth);
+            AddContact(ref collision, new fix3(max.x, min.y, z0), new fix3(max.x, min.y, z1), penetrationDepth);
+            AddContact(ref collision, new fix3(max.x, max.y, z0), new fix3(max.x, max.y, z1), penetrationDepth);
+        }
+
+        private static void AddContact(ref CollisionInfo collision, fix3 pointOnCollider0, fix3 pointOnCollider1, fix penetrationDepth)
+        {
+            collision.AddContact(pointOnCollider0, pointOnCollider1, penetrationDepth);
         }
 
         private static fix3 GetShapeCenter(Shape shape)

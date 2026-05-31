@@ -25,9 +25,13 @@ internal static class Program
         Run("broadphase tree updates moving pairs", TestBroadphaseTreeUpdatesMovingPairs);
         Run("broadphase removes stale tree proxies", TestBroadphaseRemovesStaleTreeProxies);
         Run("world AABB query uses broadphase tree", TestWorldAABBQueryUsesBroadphaseTree);
+        Run("collision filtering uses layer masks", TestCollisionFilteringUsesLayerMasks);
+        Run("queries respect layer masks", TestQueriesRespectLayerMasks);
         Run("physics raycast hits supported shapes", TestPhysicsRaycastHitsSupportedShapes);
         Run("world raycast returns nearest hit", TestWorldRaycastReturnsNearestHit);
         Run("world builds contact manifolds", TestWorldContactManifolds);
+        Run("contact solver preserves warm start impulses", TestContactSolverPreservesWarmStartImpulses);
+        Run("box face contact builds multi point manifold", TestBoxFaceContactBuildsMultiPointManifold);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
@@ -38,6 +42,8 @@ internal static class Program
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
         Run("kinematic body pushes dynamic body", TestKinematicBodyPushesDynamicBody);
         Run("solver applies linear friction", TestSolverAppliesLinearFriction);
+        Run("material bounciness affects restitution", TestMaterialBouncinessAffectsRestitution);
+        Run("material friction affects solver", TestMaterialFrictionAffectsSolver);
         Run("world integrates angular velocity", TestWorldIntegratesAngularVelocity);
         Run("world integrates torque", TestWorldIntegratesTorque);
         Run("off center contact applies angular impulse", TestOffCenterContactAppliesAngularImpulse);
@@ -263,6 +269,52 @@ internal static class Program
         AssertTrue(ContainsCollider(results, collider1.id), "query should include moved collider");
     }
 
+    private static void TestCollisionFilteringUsesLayerMasks()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        AssertTrue(world.SetColliderLayer(collider0.id, 1), "first collider layer should be valid");
+        AssertTrue(world.SetColliderLayer(collider1.id, 2), "second collider layer should be valid");
+        AssertTrue(world.SetColliderCollisionMask(collider0.id, Collider.GetLayerBit(1)), "first collider mask should be set");
+        AssertTrue(world.SetColliderCollisionMask(collider1.id, Collider.GetLayerBit(1)), "second collider mask should be set");
+        world.Update(fix.Zero);
+
+        AssertEqual(0, world.BroadphasePairs.Count);
+        AssertEqual(0, world.ContactManifolds.Count);
+
+        AssertTrue(world.SetColliderCollisionMask(collider0.id, Collider.GetLayerBit(2)), "first collider mask should include second layer");
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.BroadphasePairs.Count);
+        AssertEqual(1, world.ContactManifolds.Count);
+    }
+
+    private static void TestQueriesRespectLayerMasks()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(8, 0, 0), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        List<Collider> results = new List<Collider>();
+
+        AssertTrue(world.SetColliderLayer(collider0.id, 3), "near collider layer should be valid");
+        AssertTrue(world.SetColliderLayer(collider1.id, 4), "far collider layer should be valid");
+
+        world.QueryAABB(new AABB(new fix3(6, 0, 0), new fix3(8, 4, 4)), Collider.GetLayerBit(4), results);
+
+        AssertEqual(1, results.Count);
+        AssertEqual(collider1.id, results[0].id);
+
+        AssertTrue(world.Raycast(fix3.zero, fix3.right, out RaycastHit hit, 10, Collider.GetLayerBit(4)), "raycast should hit masked far collider");
+        AssertEqual(collider1.id, hit.colliderId);
+        AssertEqual(new fix(7), hit.distance);
+    }
+
     private static void TestPhysicsRaycastHitsSupportedShapes()
     {
         Ray ray = new Ray(fix3.zero, fix3.right);
@@ -308,6 +360,24 @@ internal static class Program
         AssertEqual(new fix(7), hit.distance);
     }
 
+    private static void TestBoxFaceContactBuildsMultiPointManifold()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddAABBCollider(rigid0.id, fix3.zero, new fix3(2, 2, 2));
+        world.AddAABBCollider(rigid1.id, fix3.zero, new fix3(2, 2, 2));
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertEqual(4, world.ContactManifolds[0].contactCount);
+        AssertEqual(fix3.right, world.ContactManifolds[0].normal);
+        AssertEqual(fix._0_5, world.ContactManifolds[0][0].penetrationDepth);
+    }
+
     private static void TestWorldContactManifolds()
     {
         World world = new World(new WorldSettings(false));
@@ -334,6 +404,33 @@ internal static class Program
         world.Update();
 
         AssertEqual(0, world.ContactManifolds.Count);
+    }
+
+    private static void TestContactSolverPreservesWarmStartImpulses()
+    {
+        WorldSettings settings = new WorldSettings(true, -10);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.friction = fix.Zero;
+        World world = new World(settings);
+        Rigid staticRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid dynamicRigid = world.CreateRigid(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.Update();
+
+        AssertEqual(1, world.ContactManifolds.Count);
+        fix firstImpulse = world.ContactManifolds[0][0].normalImpulse;
+        AssertTrue(firstImpulse > fix.Zero, "first frame should solve a normal impulse");
+
+        world.Update();
+
+        AssertEqual(1, world.ContactManifolds.Count);
+        ContactPoint point = world.ContactManifolds[0][0];
+        AssertEqual(2, point.lifetime);
+        AssertTrue(point.normalImpulse > fix.Zero, "persistent contact should keep a warm-start normal impulse");
+        AssertTrue(point.normalImpulse >= firstImpulse - fix._0_01, "warm-start impulse should stay close under constant gravity");
     }
 
     private static void TestWorldIntegratesLinearVelocity()
@@ -568,6 +665,50 @@ internal static class Program
 
         world.SetRigidType(staticRigid.id, RigidType.Static);
         world.SetInertia(dynamicRigid.id, fix3.zero);
+        world.SetVelocity(dynamicRigid.id, new fix3(1, 1, 0));
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
+    }
+
+    private static void TestMaterialBouncinessAffectsRestitution()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix.Zero;
+        settings.restitution = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid staticRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid dynamicRigid = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider staticCollider = world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+        Collider dynamicCollider = world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetColliderMaterial(staticCollider.id, new Material(fix.One, fix.Zero, fix.One));
+        world.SetColliderMaterial(dynamicCollider.id, new Material(fix.One, fix.Zero, fix.One));
+        world.SetVelocity(dynamicRigid.id, fix3.left);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertNear(fix3.right, syncedDynamic.velocity, fix._0_0001);
+    }
+
+    private static void TestMaterialFrictionAffectsSolver()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity);
+        Collider dynamicCollider = world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+        Collider staticCollider = world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetInertia(dynamicRigid.id, fix3.zero);
+        world.SetColliderMaterial(dynamicCollider.id, new Material(fix.One, fix.One, fix.Zero));
+        world.SetColliderMaterial(staticCollider.id, new Material(fix.One, fix.One, fix.Zero));
         world.SetVelocity(dynamicRigid.id, new fix3(1, 1, 0));
         world.Update(fix.Zero);
 

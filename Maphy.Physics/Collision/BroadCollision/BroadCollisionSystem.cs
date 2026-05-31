@@ -181,6 +181,11 @@ namespace Maphy.Physics
 
         public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, List<Collider> results)
         {
+            QueryAABB(colliders, bounds, Collider.AllLayers, results);
+        }
+
+        public void QueryAABB(IEnumerable<Collider> colliders, AABB bounds, int layerMask, List<Collider> results)
+        {
             if (results == null)
             {
                 return;
@@ -193,7 +198,7 @@ namespace Maphy.Physics
             for (int i = 0; i < queryResults.Count; i++)
             {
                 BroadphaseProxy proxy = queryResults[i];
-                if (Physics.IsOverlap(proxy.bounds, bounds))
+                if (proxy.collider.IsInLayerMask(layerMask) && Physics.IsOverlap(proxy.bounds, bounds))
                 {
                     results.Add(proxy.collider);
                 }
@@ -201,6 +206,11 @@ namespace Maphy.Physics
         }
 
         public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, out RaycastHit hitInfo)
+        {
+            return Raycast(colliders, ray, maxDistance, Collider.AllLayers, out hitInfo);
+        }
+
+        public bool Raycast(IEnumerable<Collider> colliders, Ray ray, fix maxDistance, int layerMask, out RaycastHit hitInfo)
         {
             hitInfo = default;
             if (maxDistance < fix.Zero)
@@ -218,6 +228,11 @@ namespace Maphy.Physics
             for (int i = 0; i < queryResults.Count; i++)
             {
                 BroadphaseProxy proxy = queryResults[i];
+                if (!proxy.collider.IsInLayerMask(layerMask))
+                {
+                    continue;
+                }
+
                 if (!Physics.TryRaycast(proxy.collider.shape, ray, maxDistance, out RaycastHit candidate))
                 {
                     continue;
@@ -266,6 +281,11 @@ namespace Maphy.Physics
             }
 
             if (a.rigidId != 0 && a.rigidId == b.rigidId)
+            {
+                return false;
+            }
+
+            if (!a.collider.CanCollideWith(b.collider))
             {
                 return false;
             }

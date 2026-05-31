@@ -5,9 +5,15 @@ namespace Maphy.Physics
     public class Collider
     {
         public static ulong Id = 0;
+        public const int MinLayer = 0;
+        public const int MaxLayer = 31;
+        public const int DefaultLayer = 0;
+        public const int AllLayers = -1;
 
         public ulong id { get; set; }
         public ulong rigidId { get; set; }
+        public int layer { get; private set; }
+        public int collisionMask { get; private set; }
         public fix3 localCenter { get; private set; }
         public quaternion localOrientation { get; private set; }
 
@@ -25,6 +31,8 @@ namespace Maphy.Physics
             shape = new AABB(center, size);
             material = Material.Default;
             isTrigger = false;
+            layer = DefaultLayer;
+            collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
         }
 
@@ -37,6 +45,8 @@ namespace Maphy.Physics
             shape = new OBB(center, size, rotation);
             material = Material.Default;
             isTrigger = false;
+            layer = DefaultLayer;
+            collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
         }
 
@@ -49,6 +59,8 @@ namespace Maphy.Physics
             shape = new Sphere(center, radius);
             material = Material.Default;
             isTrigger = false;
+            layer = DefaultLayer;
+            collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
         }
 
@@ -61,6 +73,8 @@ namespace Maphy.Physics
             shape = new Capsule(center, radius, height, rotation, fix3.up);
             material = Material.Default;
             isTrigger = false;
+            layer = DefaultLayer;
+            collisionMask = AllLayers;
             collisionInfo = new CollisionInfo();
         }
 
@@ -112,6 +126,44 @@ namespace Maphy.Physics
         public void SetMaterial(Material material)
         {
             this.material = material;
+        }
+
+        public bool SetLayer(int layer)
+        {
+            if (layer < MinLayer || layer > MaxLayer)
+            {
+                return false;
+            }
+
+            this.layer = layer;
+            return true;
+        }
+
+        public void SetCollisionMask(int collisionMask)
+        {
+            this.collisionMask = collisionMask;
+        }
+
+        public bool IsInLayerMask(int layerMask)
+        {
+            return (layerMask & GetLayerBit(layer)) != 0;
+        }
+
+        public bool CanCollideWith(Collider other)
+        {
+            return other != null
+                && IsLayerEnabled(collisionMask, other.layer)
+                && IsLayerEnabled(other.collisionMask, layer);
+        }
+
+        public static int GetLayerBit(int layer)
+        {
+            return layer < MinLayer || layer > MaxLayer ? 0 : 1 << layer;
+        }
+
+        private static bool IsLayerEnabled(int mask, int layer)
+        {
+            return (mask & GetLayerBit(layer)) != 0;
         }
 
         public delegate void CollisionCallback(CollisionInfo collision);

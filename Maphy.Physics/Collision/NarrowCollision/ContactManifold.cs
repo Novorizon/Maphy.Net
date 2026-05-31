@@ -12,6 +12,8 @@ namespace Maphy.Physics
         public fix normalImpulse;
         public fix tangentImpulse0;
         public fix tangentImpulse1;
+        public fix3 tangent0;
+        public fix3 tangent1;
         public int lifetime;
 
         public ContactPoint(
@@ -29,6 +31,8 @@ namespace Maphy.Physics
             normalImpulse = preserveImpulse ? previous.normalImpulse : fix.Zero;
             tangentImpulse0 = preserveImpulse ? previous.tangentImpulse0 : fix.Zero;
             tangentImpulse1 = preserveImpulse ? previous.tangentImpulse1 : fix.Zero;
+            tangent0 = preserveImpulse ? previous.tangent0 : fix3.zero;
+            tangent1 = preserveImpulse ? previous.tangent1 : fix3.zero;
             lifetime = preserveImpulse ? previous.lifetime + 1 : 1;
         }
     }
@@ -77,28 +81,33 @@ namespace Maphy.Physics
 
         public void Update(CollisionInfo collision, bool isTrigger, int frameIndex)
         {
-            bool preserveImpulse = TryFindPersistentPoint(collision.contactPoint, out ContactPoint previous);
-
             key = collision.key;
             colliderId0 = collision.id;
             colliderId1 = collision.otherId;
             rigidId0 = collision.rigidId;
             rigidId1 = collision.otherRigidId;
             normal = collision.normal;
-            contactCount = 1;
             lastUpdatedFrame = frameIndex;
             this.isTrigger = isTrigger;
 
-            point0 = new ContactPoint(
-                collision.contactPoint,
-                collision.contactPoint1,
-                collision.contactPoint2,
-                collision.penetrationDepth,
-                previous,
-                preserveImpulse);
-            point1 = default;
-            point2 = default;
-            point3 = default;
+            int newContactCount = System.Math.Min(collision.contactCount, MaxContactPoints);
+            for (int i = 0; i < newContactCount; i++)
+            {
+                CollisionContact contact = collision[i];
+                bool preserveImpulse = TryFindPersistentPoint(contact.position, out ContactPoint previous);
+                SetPoint(
+                    i,
+                    new ContactPoint(
+                        contact.position,
+                        contact.pointOnCollider0,
+                        contact.pointOnCollider1,
+                        contact.penetrationDepth,
+                        previous,
+                        preserveImpulse));
+            }
+
+            contactCount = newContactCount;
+            ClearUnusedPoints(newContactCount);
         }
 
         internal ref ContactPoint GetPointRef(int index)
@@ -118,6 +127,48 @@ namespace Maphy.Physics
                     return ref point2;
                 default:
                     return ref point3;
+            }
+        }
+
+        private void SetPoint(int index, ContactPoint point)
+        {
+            switch (index)
+            {
+                case 0:
+                    point0 = point;
+                    break;
+                case 1:
+                    point1 = point;
+                    break;
+                case 2:
+                    point2 = point;
+                    break;
+                default:
+                    point3 = point;
+                    break;
+            }
+        }
+
+        private void ClearUnusedPoints(int usedCount)
+        {
+            if (usedCount <= 0)
+            {
+                point0 = default;
+            }
+
+            if (usedCount <= 1)
+            {
+                point1 = default;
+            }
+
+            if (usedCount <= 2)
+            {
+                point2 = default;
+            }
+
+            if (usedCount <= 3)
+            {
+                point3 = default;
             }
         }
 

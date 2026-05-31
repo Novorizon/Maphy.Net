@@ -288,6 +288,27 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetColliderLayer(ulong colliderId, int layer)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            return collider.SetLayer(layer);
+        }
+
+        public bool SetColliderCollisionMask(ulong colliderId, int collisionMask)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            collider.SetCollisionMask(collisionMask);
+            return true;
+        }
+
         public Collider AddAABBCollider(ulong rigidId, fix3 center, fix3 size)
         {
             Collider collider = new Collider();
@@ -339,19 +360,34 @@ namespace Maphy.Physics
 
         public void QueryAABB(AABB bounds, List<Collider> results)
         {
+            QueryAABB(bounds, Collider.AllLayers, results);
+        }
+
+        public void QueryAABB(AABB bounds, int layerMask, List<Collider> results)
+        {
             SyncColliders();
-            collisionSystem.QueryAABB(colliders.Values, bounds, results);
+            collisionSystem.QueryAABB(colliders.Values, bounds, layerMask, results);
         }
 
         public bool Raycast(Ray ray, out RaycastHit hitInfo, fix maxDistance)
         {
+            return Raycast(ray, out hitInfo, maxDistance, Collider.AllLayers);
+        }
+
+        public bool Raycast(Ray ray, out RaycastHit hitInfo, fix maxDistance, int layerMask)
+        {
             SyncColliders();
-            return collisionSystem.Raycast(colliders.Values, ray, maxDistance, out hitInfo);
+            return collisionSystem.Raycast(colliders.Values, ray, maxDistance, layerMask, out hitInfo);
         }
 
         public bool Raycast(fix3 origin, fix3 direction, out RaycastHit hitInfo, fix maxDistance)
         {
             return Raycast(new Ray(origin, direction), out hitInfo, maxDistance);
+        }
+
+        public bool Raycast(fix3 origin, fix3 direction, out RaycastHit hitInfo, fix maxDistance, int layerMask)
+        {
+            return Raycast(new Ray(origin, direction), out hitInfo, maxDistance, layerMask);
         }
 
         private void IntegrateForces(fix deltaTime)
@@ -435,6 +471,7 @@ namespace Maphy.Physics
         {
             int solverIterations = settings.solverIterations > 0 ? settings.solverIterations : 1;
             IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
+            WarmStartContacts(manifolds);
             for (int iteration = 0; iteration < solverIterations; iteration++)
             {
                 for (int i = 0; i < manifolds.Count; i++)
@@ -447,13 +484,59 @@ namespace Maphy.Physics
 
                     for (int j = 0; j < manifold.contactCount; j++)
                     {
-                        ResolveContactVelocity(manifold, manifold[j]);
+                        ref ContactPoint point = ref manifold.GetPointRef(j);
+                        ResolveContactVelocity(manifold, ref point);
                     }
                 }
             }
         }
 
-        private void ResolveContactVelocity(ContactManifold manifold, ContactPoint point)
+        private void WarmStartContacts(IReadOnlyList<ContactManifold> manifolds)
+        {
+            for (int i = 0; i < manifolds.Count; i++)
+            {
+                ContactManifold manifold = manifolds[i];
+                if (manifold.isTrigger)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < manifold.contactCount; j++)
+                {
+                    ContactPoint point = manifold[j];
+                    if (point.normalImpulse <= fix.Zero
+                        && math.abs(point.tangentImpulse0) <= math.Epsilon
+                        && math.abs(point.tangentImpulse1) <= math.Epsilon)
+                    {
+                        continue;
+                    }
+
+                    bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+                    bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+                    if (!hasRigid0 && !hasRigid1)
+                    {
+                        continue;
+                    }
+
+                    fix3 r0 = hasRigid0 ? point.position - GetEntityPosition(rigid0.id) : fix3.zero;
+                    fix3 r1 = hasRigid1 ? point.position - GetEntityPosition(rigid1.id) : fix3.zero;
+                    fix3 impulse = manifold.normal * point.normalImpulse;
+                    if (math.lengthsq(point.tangent0) > math.Epsilon)
+                    {
+                        impulse += point.tangent0 * point.tangentImpulse0;
+                    }
+
+                    if (math.lengthsq(point.tangent1) > math.Epsilon)
+                    {
+                        impulse += point.tangent1 * point.tangentImpulse1;
+                    }
+
+                    ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
+                }
+            }
+        }
+
+        private void ResolveContactVelocity(ContactManifold manifold, ref ContactPoint point)
         {
             bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
             bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
@@ -468,7 +551,7 @@ namespace Maphy.Physics
             fix3 velocity1 = hasRigid1 ? GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
-            if (normalVelocity > fix.Zero)
+            if (normalVelocity > fix.Zero && point.lifetime <= 1)
             {
                 return;
             }
@@ -481,22 +564,16 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix normalImpulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / effectiveMass / manifold.contactCount;
+            fix restitution = normalVelocity < -math.Epsilon ? GetCombinedRestitution(manifold) : fix.Zero;
+            fix normalImpulseDelta = -(fix.One + restitution) * normalVelocity / effectiveMass;
+            fix previousNormalImpulse = point.normalImpulse;
+            point.normalImpulse = math.max(fix.Zero, previousNormalImpulse + normalImpulseDelta);
+            fix normalImpulseMagnitude = point.normalImpulse - previousNormalImpulse;
             fix3 impulse = manifold.normal * normalImpulseMagnitude;
 
-            if (hasRigid0 && inverseMass0 > fix.Zero)
-            {
-                rigid0.velocity -= impulse * inverseMass0;
-                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, impulse);
-            }
+            ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
 
-            if (hasRigid1 && inverseMass1 > fix.Zero)
-            {
-                rigid1.velocity += impulse * inverseMass1;
-                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, impulse);
-            }
-
-            ResolveContactFriction(manifold, hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, normalImpulseMagnitude);
+            ResolveContactFriction(manifold, ref point, hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1);
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
@@ -511,6 +588,7 @@ namespace Maphy.Physics
 
         private void ResolveContactFriction(
             ContactManifold manifold,
+            ref ContactPoint point,
             bool hasRigid0,
             Rigid rigid0,
             fix inverseMass0,
@@ -518,11 +596,10 @@ namespace Maphy.Physics
             bool hasRigid1,
             Rigid rigid1,
             fix inverseMass1,
-            fix3 r1,
-            fix normalImpulseMagnitude)
+            fix3 r1)
         {
-            fix friction = math.max(fix.Zero, settings.friction);
-            if (friction <= fix.Zero || normalImpulseMagnitude <= fix.Zero)
+            fix friction = GetCombinedFriction(manifold);
+            if (friction <= fix.Zero || point.normalImpulse <= fix.Zero)
             {
                 return;
             }
@@ -540,6 +617,12 @@ namespace Maphy.Physics
 
             fix tangentSpeed = math.sqrt(tangentSpeedSq);
             fix3 tangent = tangentVelocity / tangentSpeed;
+            if (math.lengthsq(point.tangent0) <= math.Epsilon || math.dot(point.tangent0, tangent) < fix._0_5)
+            {
+                point.tangentImpulse0 = fix.Zero;
+            }
+
+            point.tangent0 = tangent;
             fix effectiveMass = inverseMass0 + inverseMass1
                 + GetAngularEffectiveMass(rigid0, r0, tangent)
                 + GetAngularEffectiveMass(rigid1, r1, tangent);
@@ -548,22 +631,88 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix frictionMagnitude = -math.dot(relativeVelocity, tangent) / effectiveMass / manifold.contactCount;
-            fix maxFriction = normalImpulseMagnitude * friction;
-            frictionMagnitude = math.clamp(frictionMagnitude, -maxFriction, maxFriction);
+            fix frictionDelta = -math.dot(relativeVelocity, tangent) / effectiveMass;
+            fix maxFriction = point.normalImpulse * friction;
+            fix previousTangentImpulse = point.tangentImpulse0;
+            point.tangentImpulse0 = math.clamp(previousTangentImpulse + frictionDelta, -maxFriction, maxFriction);
+            fix frictionMagnitude = point.tangentImpulse0 - previousTangentImpulse;
             fix3 frictionImpulse = tangent * frictionMagnitude;
+
+            ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, frictionImpulse);
+        }
+
+        private void ApplyImpulse(
+            bool hasRigid0,
+            Rigid rigid0,
+            fix inverseMass0,
+            fix3 r0,
+            bool hasRigid1,
+            Rigid rigid1,
+            fix inverseMass1,
+            fix3 r1,
+            fix3 impulse)
+        {
+            if (impulse == fix3.zero)
+            {
+                return;
+            }
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
-                rigid0.velocity -= frictionImpulse * inverseMass0;
-                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, frictionImpulse);
+                rigid0.velocity -= impulse * inverseMass0;
+                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, impulse);
+                rigids[rigid0.id] = rigid0;
             }
 
             if (hasRigid1 && inverseMass1 > fix.Zero)
             {
-                rigid1.velocity += frictionImpulse * inverseMass1;
-                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, frictionImpulse);
+                rigid1.velocity += impulse * inverseMass1;
+                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, impulse);
+                rigids[rigid1.id] = rigid1;
             }
+        }
+
+        private fix GetCombinedRestitution(ContactManifold manifold)
+        {
+            fix restitution = math.max(fix.Zero, settings.restitution);
+            if (colliders.TryGetValue(manifold.colliderId0, out Collider collider0))
+            {
+                restitution = math.max(restitution, collider0.material.GetBounciness());
+            }
+
+            if (colliders.TryGetValue(manifold.colliderId1, out Collider collider1))
+            {
+                restitution = math.max(restitution, collider1.material.GetBounciness());
+            }
+
+            return math.clamp(restitution, fix.Zero, fix.One);
+        }
+
+        private fix GetCombinedFriction(ContactManifold manifold)
+        {
+            fix friction = math.max(fix.Zero, settings.friction);
+            bool hasMaterial = false;
+            fix materialFriction = fix.Zero;
+
+            if (colliders.TryGetValue(manifold.colliderId0, out Collider collider0))
+            {
+                materialFriction += collider0.material.GetFrictionCoefficient();
+                hasMaterial = true;
+            }
+
+            if (colliders.TryGetValue(manifold.colliderId1, out Collider collider1))
+            {
+                materialFriction += collider1.material.GetFrictionCoefficient();
+                hasMaterial = true;
+            }
+
+            if (hasMaterial)
+            {
+                materialFriction = materialFriction * fix._0_5;
+                friction = math.max(friction, materialFriction);
+            }
+
+            return math.max(fix.Zero, friction);
         }
 
         private fix3 GetEntityPosition(ulong entityId)
@@ -620,7 +769,7 @@ namespace Maphy.Physics
                         continue;
                     }
 
-                    fix3 correction = manifold.normal * (penetration * settings.positionCorrectionPercent / inverseMassSum);
+                    fix3 correction = manifold.normal * (penetration * settings.positionCorrectionPercent / inverseMassSum / manifold.contactCount);
                     if (hasRigid0 && inverseMass0 > fix.Zero)
                     {
                         TranslateEntity(rigid0.id, -correction * inverseMass0);
