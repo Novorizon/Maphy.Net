@@ -37,5 +37,17 @@ namespace Maphy.Physics
         {
             accumulatedImpulse = fix.Zero;
         }
+
+        internal virtual void WarmStart(SolverContext context)
+        {
+        }
+
+        internal virtual void SolveVelocity(SolverContext context)
+        {
+        }
+
+        internal virtual void SolvePosition(SolverContext context)
+        {
+        }
     }
 }

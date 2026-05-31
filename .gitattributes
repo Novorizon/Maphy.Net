@@ -1,0 +1,5 @@
+/.gitattributes text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.asmdef text eol=lf
+*.md text eol=lf

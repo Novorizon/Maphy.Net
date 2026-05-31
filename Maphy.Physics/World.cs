@@ -58,9 +58,8 @@ namespace Maphy.Physics
             IntegrateTransforms(deltaTime);
             SyncColliders();
             collisionSystem.Collision(GetActiveColliders());
-            ResolveContacts();
-            CorrectPositions();
-            CorrectConstraints();
+            SolveVelocity();
+            SolvePositions();
             SyncColliders();
             DispatchCollisionCallbacks();
         }
@@ -626,12 +625,13 @@ namespace Maphy.Physics
             return quaternion.normalize(deltaRotation * orientation);
         }
 
-        private void ResolveContacts()
+        private void SolveVelocity()
         {
             int solverIterations = settings.solverIterations > 0 ? settings.solverIterations : 1;
             IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
-            WarmStartContacts(manifolds);
-            WarmStartConstraints();
+            SolverContext context = CreateSolverContext();
+            WarmStartContacts(manifolds, context);
+            WarmStartConstraints(context);
             for (int iteration = 0; iteration < solverIterations; iteration++)
             {
                 for (int i = 0; i < manifolds.Count; i++)
@@ -645,15 +645,15 @@ namespace Maphy.Physics
                     for (int j = 0; j < manifold.contactCount; j++)
                     {
                         ref ContactPoint point = ref manifold.GetPointRef(j);
-                        ResolveContactVelocity(manifold, ref point);
+                        ResolveContactVelocity(manifold, ref point, context);
                     }
                 }
 
-                ResolveConstraintsVelocity();
+                SolveConstraintVelocity(context);
             }
         }
 
-        private void WarmStartContacts(IReadOnlyList<ContactManifold> manifolds)
+        private void WarmStartContacts(IReadOnlyList<ContactManifold> manifolds, SolverContext context)
         {
             for (int i = 0; i < manifolds.Count; i++)
             {
@@ -673,15 +673,15 @@ namespace Maphy.Physics
                         continue;
                     }
 
-                    bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
-                    bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+                    bool hasRigid0 = context.TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+                    bool hasRigid1 = context.TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
                     if (!hasRigid0 && !hasRigid1)
                     {
                         continue;
                     }
 
-                    fix3 r0 = hasRigid0 ? point.position - GetEntityPosition(rigid0.id) : fix3.zero;
-                    fix3 r1 = hasRigid1 ? point.position - GetEntityPosition(rigid1.id) : fix3.zero;
+                    fix3 r0 = hasRigid0 ? point.position - context.GetEntityPosition(rigid0.id) : fix3.zero;
+                    fix3 r1 = hasRigid1 ? point.position - context.GetEntityPosition(rigid1.id) : fix3.zero;
                     fix3 impulse = manifold.normal * point.normalImpulse;
                     if (math.lengthsq(point.tangent0) > math.Epsilon)
                     {
@@ -693,108 +693,48 @@ namespace Maphy.Physics
                         impulse += point.tangent1 * point.tangentImpulse1;
                     }
 
-                    ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
+                    context.ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
                 }
             }
         }
 
-        private void WarmStartConstraints()
+        private void WarmStartConstraints(SolverContext context)
         {
             for (int i = 0; i < constraintIds.Count; i++)
             {
                 ulong currentConstraintId = constraintIds[i];
-                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint)
-                    || constraint.accumulatedImpulse == fix.Zero)
+                if (constraints.TryGetValue(currentConstraintId, out Constraint constraint))
                 {
-                    continue;
-                }
-
-                if (constraint is DistanceConstraint distanceConstraint
-                    && TryGetDistanceConstraintSolveData(distanceConstraint, out DistanceConstraintSolveData data))
-                {
-                    ApplyImpulse(
-                        true,
-                        data.rigid0,
-                        data.inverseMass0,
-                        data.relativeAnchor0,
-                        true,
-                        data.rigid1,
-                        data.inverseMass1,
-                        data.relativeAnchor1,
-                        data.axis * distanceConstraint.accumulatedImpulse);
-                }
-                else
-                {
-                    constraint.ClearWarmStart();
+                    constraint.WarmStart(context);
                 }
             }
         }
 
-        private void ResolveConstraintsVelocity()
+        private void SolveConstraintVelocity(SolverContext context)
         {
             for (int i = 0; i < constraintIds.Count; i++)
             {
                 ulong currentConstraintId = constraintIds[i];
-                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint))
+                if (constraints.TryGetValue(currentConstraintId, out Constraint constraint))
                 {
-                    continue;
-                }
-
-                if (constraint is DistanceConstraint distanceConstraint)
-                {
-                    ResolveDistanceConstraintVelocity(distanceConstraint);
+                    constraint.SolveVelocity(context);
                 }
             }
         }
 
-        private void ResolveDistanceConstraintVelocity(DistanceConstraint constraint)
+        private void ResolveContactVelocity(ContactManifold manifold, ref ContactPoint point, SolverContext context)
         {
-            if (!TryGetDistanceConstraintSolveData(constraint, out DistanceConstraintSolveData data))
-            {
-                constraint.ClearWarmStart();
-                return;
-            }
-
-            fix effectiveMass = data.inverseMass0 + data.inverseMass1
-                + GetAngularEffectiveMass(data.rigid0, data.relativeAnchor0, data.axis)
-                + GetAngularEffectiveMass(data.rigid1, data.relativeAnchor1, data.axis);
-            if (effectiveMass <= fix.Zero)
-            {
-                constraint.ClearWarmStart();
-                return;
-            }
-
-            fix3 velocity0 = GetVelocityAtPoint(data.rigid0, data.relativeAnchor0);
-            fix3 velocity1 = GetVelocityAtPoint(data.rigid1, data.relativeAnchor1);
-            fix constraintVelocity = math.dot(velocity1 - velocity0, data.axis);
-            fix impulseDelta = -constraintVelocity / effectiveMass;
-            constraint.accumulatedImpulse += impulseDelta;
-
-            ApplyImpulse(
-                true,
-                data.rigid0,
-                data.inverseMass0,
-                data.relativeAnchor0,
-                true,
-                data.rigid1,
-                data.inverseMass1,
-                data.relativeAnchor1,
-                data.axis * impulseDelta);
-        }
-
-        private void ResolveContactVelocity(ContactManifold manifold, ref ContactPoint point)
-        {
-            bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
-            bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+            bool hasRigid0 = context.TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+            bool hasRigid1 = context.TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
             if (!hasRigid0 && !hasRigid1)
             {
                 return;
             }
 
-            fix3 r0 = hasRigid0 ? point.position - GetEntityPosition(rigid0.id) : fix3.zero;
-            fix3 r1 = hasRigid1 ? point.position - GetEntityPosition(rigid1.id) : fix3.zero;
-            fix3 velocity0 = hasRigid0 ? GetVelocityAtPoint(rigid0, r0) : fix3.zero;
-            fix3 velocity1 = hasRigid1 ? GetVelocityAtPoint(rigid1, r1) : fix3.zero;
+            fix3 r0 = hasRigid0 ? point.position - context.GetEntityPosition(rigid0.id) : fix3.zero;
+            fix3 r1 = hasRigid1 ? point.position - context.GetEntityPosition(rigid1.id) : fix3.zero;
+            fix3 velocity0 = hasRigid0 ? SolverContext.GetVelocityAtPoint(rigid0, r0) : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? SolverContext.GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             if (normalVelocity > fix.Zero && point.lifetime <= 1)
@@ -803,8 +743,8 @@ namespace Maphy.Physics
             }
 
             fix effectiveMass = inverseMass0 + inverseMass1
-                + GetAngularEffectiveMass(rigid0, r0, manifold.normal)
-                + GetAngularEffectiveMass(rigid1, r1, manifold.normal);
+                + SolverContext.GetAngularEffectiveMass(rigid0, r0, manifold.normal)
+                + SolverContext.GetAngularEffectiveMass(rigid1, r1, manifold.normal);
             if (effectiveMass <= fix.Zero)
             {
                 return;
@@ -817,9 +757,9 @@ namespace Maphy.Physics
             fix normalImpulseMagnitude = point.normalImpulse - previousNormalImpulse;
             fix3 impulse = manifold.normal * normalImpulseMagnitude;
 
-            ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
+            context.ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, impulse);
 
-            ResolveContactFriction(manifold, ref point, hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1);
+            ResolveContactFriction(manifold, ref point, hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, context);
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
@@ -842,7 +782,8 @@ namespace Maphy.Physics
             bool hasRigid1,
             Rigid rigid1,
             fix inverseMass1,
-            fix3 r1)
+            fix3 r1,
+            SolverContext context)
         {
             fix friction = GetCombinedFriction(manifold);
             if (friction <= fix.Zero || point.normalImpulse <= fix.Zero)
@@ -850,8 +791,8 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix3 velocity0 = hasRigid0 ? GetVelocityAtPoint(rigid0, r0) : fix3.zero;
-            fix3 velocity1 = hasRigid1 ? GetVelocityAtPoint(rigid1, r1) : fix3.zero;
+            fix3 velocity0 = hasRigid0 ? SolverContext.GetVelocityAtPoint(rigid0, r0) : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? SolverContext.GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             fix3 tangentVelocity = relativeVelocity - manifold.normal * normalVelocity;
@@ -870,8 +811,8 @@ namespace Maphy.Physics
 
             point.tangent0 = tangent;
             fix effectiveMass = inverseMass0 + inverseMass1
-                + GetAngularEffectiveMass(rigid0, r0, tangent)
-                + GetAngularEffectiveMass(rigid1, r1, tangent);
+                + SolverContext.GetAngularEffectiveMass(rigid0, r0, tangent)
+                + SolverContext.GetAngularEffectiveMass(rigid1, r1, tangent);
             if (effectiveMass <= fix.Zero)
             {
                 return;
@@ -884,38 +825,7 @@ namespace Maphy.Physics
             fix frictionMagnitude = point.tangentImpulse0 - previousTangentImpulse;
             fix3 frictionImpulse = tangent * frictionMagnitude;
 
-            ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, frictionImpulse);
-        }
-
-        private void ApplyImpulse(
-            bool hasRigid0,
-            Rigid rigid0,
-            fix inverseMass0,
-            fix3 r0,
-            bool hasRigid1,
-            Rigid rigid1,
-            fix inverseMass1,
-            fix3 r1,
-            fix3 impulse)
-        {
-            if (impulse == fix3.zero)
-            {
-                return;
-            }
-
-            if (hasRigid0 && inverseMass0 > fix.Zero)
-            {
-                rigid0.velocity -= impulse * inverseMass0;
-                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, impulse);
-                rigids[rigid0.id] = rigid0;
-            }
-
-            if (hasRigid1 && inverseMass1 > fix.Zero)
-            {
-                rigid1.velocity += impulse * inverseMass1;
-                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, impulse);
-                rigids[rigid1.id] = rigid1;
-            }
+            context.ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, frictionImpulse);
         }
 
         private fix GetCombinedRestitution(ContactManifold manifold)
@@ -961,28 +871,14 @@ namespace Maphy.Physics
             return math.max(fix.Zero, friction);
         }
 
-        private fix3 GetEntityPosition(ulong entityId)
+        private void SolvePositions()
         {
-            return entities.TryGetValue(entityId, out Entity entity) ? entity.translation : fix3.zero;
+            SolverContext context = CreateSolverContext();
+            CorrectContactPositions(context);
+            SolveConstraintPositions(context);
         }
 
-        private static fix3 GetVelocityAtPoint(Rigid rigid, fix3 relativePoint)
-        {
-            return rigid.velocity + math.cross(rigid.angularVelocity, relativePoint);
-        }
-
-        private static fix GetAngularEffectiveMass(Rigid rigid, fix3 relativePoint, fix3 direction)
-        {
-            if (rigid == null || !rigid.IsDynamic)
-            {
-                return fix.Zero;
-            }
-
-            fix3 angularVelocityPerImpulse = rigid.inverseInertia * math.cross(relativePoint, direction);
-            return math.dot(math.cross(angularVelocityPerImpulse, relativePoint), direction);
-        }
-
-        private void CorrectPositions()
+        private void CorrectContactPositions(SolverContext context)
         {
             IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
             for (int i = 0; i < manifolds.Count; i++)
@@ -993,8 +889,8 @@ namespace Maphy.Physics
                     continue;
                 }
 
-                bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
-                bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
+                bool hasRigid0 = context.TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
+                bool hasRigid1 = context.TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
                 if (!hasRigid0 && !hasRigid1)
                 {
                     continue;
@@ -1018,145 +914,32 @@ namespace Maphy.Physics
                     fix3 correction = manifold.normal * (penetration * settings.positionCorrectionPercent / inverseMassSum / manifold.contactCount);
                     if (hasRigid0 && inverseMass0 > fix.Zero)
                     {
-                        TranslateEntity(rigid0.id, -correction * inverseMass0);
+                        context.TranslateEntity(rigid0.id, -correction * inverseMass0);
                     }
 
                     if (hasRigid1 && inverseMass1 > fix.Zero)
                     {
-                        TranslateEntity(rigid1.id, correction * inverseMass1);
+                        context.TranslateEntity(rigid1.id, correction * inverseMass1);
                     }
                 }
             }
         }
 
-        private void CorrectConstraints()
+        private void SolveConstraintPositions(SolverContext context)
         {
             for (int i = 0; i < constraintIds.Count; i++)
             {
                 ulong currentConstraintId = constraintIds[i];
-                if (!constraints.TryGetValue(currentConstraintId, out Constraint constraint))
+                if (constraints.TryGetValue(currentConstraintId, out Constraint constraint))
                 {
-                    continue;
-                }
-
-                if (constraint is DistanceConstraint distanceConstraint)
-                {
-                    CorrectDistanceConstraint(distanceConstraint);
+                    constraint.SolvePosition(context);
                 }
             }
         }
 
-        private void CorrectDistanceConstraint(DistanceConstraint constraint)
+        private SolverContext CreateSolverContext()
         {
-            if (!TryGetDistanceConstraintSolveData(constraint, out DistanceConstraintSolveData data))
-            {
-                constraint.ClearWarmStart();
-                return;
-            }
-
-            fix error = data.currentDistance - constraint.distance;
-            if (math.abs(error) <= math.Epsilon)
-            {
-                return;
-            }
-
-            fix inverseMassSum = data.inverseMass0 + data.inverseMass1;
-            if (inverseMassSum <= fix.Zero)
-            {
-                constraint.ClearWarmStart();
-                return;
-            }
-
-            fix3 correction = data.axis * (error / inverseMassSum);
-            if (data.inverseMass0 > fix.Zero)
-            {
-                TranslateEntity(data.rigid0.id, correction * data.inverseMass0);
-            }
-
-            if (data.inverseMass1 > fix.Zero)
-            {
-                TranslateEntity(data.rigid1.id, -correction * data.inverseMass1);
-            }
-        }
-
-        private bool TryGetDistanceConstraintSolveData(DistanceConstraint constraint, out DistanceConstraintSolveData data)
-        {
-            data = default;
-            if (!IsConstraintActive(constraint)
-                || !rigids.TryGetValue(constraint.rigidId0, out Rigid rigid0)
-                || !rigids.TryGetValue(constraint.rigidId1, out Rigid rigid1)
-                || !entities.TryGetValue(constraint.rigidId0, out Entity entity0)
-                || !entities.TryGetValue(constraint.rigidId1, out Entity entity1))
-            {
-                return false;
-            }
-
-            fix inverseMass0 = rigid0.inverseMass;
-            fix inverseMass1 = rigid1.inverseMass;
-            if (inverseMass0 + inverseMass1 <= fix.Zero)
-            {
-                return false;
-            }
-
-            fix3 relativeAnchor0 = entity0.orientation * constraint.localAnchor0;
-            fix3 relativeAnchor1 = entity1.orientation * constraint.localAnchor1;
-            fix3 worldAnchor0 = entity0.translation + relativeAnchor0;
-            fix3 worldAnchor1 = entity1.translation + relativeAnchor1;
-            fix3 delta = worldAnchor1 - worldAnchor0;
-            fix distanceSq = math.lengthsq(delta);
-            if (distanceSq <= math.Epsilon)
-            {
-                return false;
-            }
-
-            fix currentDistance = math.sqrt(distanceSq);
-            data = new DistanceConstraintSolveData(
-                rigid0,
-                rigid1,
-                inverseMass0,
-                inverseMass1,
-                relativeAnchor0,
-                relativeAnchor1,
-                delta / currentDistance,
-                currentDistance);
-            return true;
-        }
-
-        private bool IsConstraintActive(Constraint constraint)
-        {
-            if (constraint == null || !constraint.enabled)
-            {
-                return false;
-            }
-
-            return rigids.TryGetValue(constraint.rigidId0, out Rigid rigid0)
-                && rigids.TryGetValue(constraint.rigidId1, out Rigid rigid1)
-                && rigid0.enabled
-                && rigid1.enabled;
-        }
-
-        private bool TryGetRigidMassData(ulong rigidId, out Rigid rigid, out fix inverseMass)
-        {
-            if (rigids.TryGetValue(rigidId, out rigid))
-            {
-                inverseMass = rigid.inverseMass;
-                return true;
-            }
-
-            rigid = default;
-            inverseMass = fix.Zero;
-            return false;
-        }
-
-        private void TranslateEntity(ulong entityId, fix3 delta)
-        {
-            if (!entities.TryGetValue(entityId, out Entity entity))
-            {
-                return;
-            }
-
-            entity.translation += delta;
-            entities[entityId] = entity;
+            return new SolverContext(rigids, entities);
         }
 
         private void DispatchCollisionCallbacks()
@@ -1402,38 +1185,6 @@ namespace Maphy.Physics
             Enter,
             Stay,
             Exit
-        }
-
-        private readonly struct DistanceConstraintSolveData
-        {
-            public readonly Rigid rigid0;
-            public readonly Rigid rigid1;
-            public readonly fix inverseMass0;
-            public readonly fix inverseMass1;
-            public readonly fix3 relativeAnchor0;
-            public readonly fix3 relativeAnchor1;
-            public readonly fix3 axis;
-            public readonly fix currentDistance;
-
-            public DistanceConstraintSolveData(
-                Rigid rigid0,
-                Rigid rigid1,
-                fix inverseMass0,
-                fix inverseMass1,
-                fix3 relativeAnchor0,
-                fix3 relativeAnchor1,
-                fix3 axis,
-                fix currentDistance)
-            {
-                this.rigid0 = rigid0;
-                this.rigid1 = rigid1;
-                this.inverseMass0 = inverseMass0;
-                this.inverseMass1 = inverseMass1;
-                this.relativeAnchor0 = relativeAnchor0;
-                this.relativeAnchor1 = relativeAnchor1;
-                this.axis = axis;
-                this.currentDistance = currentDistance;
-            }
         }
 
         private readonly struct CollisionEventState
