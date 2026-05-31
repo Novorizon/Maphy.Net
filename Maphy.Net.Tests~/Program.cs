@@ -20,8 +20,10 @@ internal static class Program
         Run("OBB support point uses oriented box", TestOBBSupportPoint);
         Run("sphere AABB contact reports penetration", TestSphereAABBContact);
         Run("dynamic AABB tree query updates moved proxy", TestDynamicAABBTreeUpdatesMovedProxy);
+        Run("dynamic AABB tree keeps height bounded", TestDynamicAABBTreeKeepsHeightBounded);
         Run("world update syncs collider transform", TestWorldTransformSync);
         Run("broadphase tree updates moving pairs", TestBroadphaseTreeUpdatesMovingPairs);
+        Run("broadphase removes stale tree proxies", TestBroadphaseRemovesStaleTreeProxies);
         Run("world builds contact manifolds", TestWorldContactManifolds);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
@@ -158,6 +160,23 @@ internal static class Program
         AssertEqual(collider.id, results[0].colliderId);
     }
 
+    private static void TestDynamicAABBTreeKeepsHeightBounded()
+    {
+        DynamicAABBTree tree = new DynamicAABBTree(fix._0_1);
+
+        for (int i = 0; i < 32; i++)
+        {
+            Collider collider = new Collider();
+            collider.AddSphereCollider((ulong)(i + 1), new fix3(i * 3, 0, 0), fix._0_5);
+            AABB bounds = new AABB(new fix3(i * 3, 0, 0), new fix3(1, 1, 1));
+            tree.CreateProxy(new BroadphaseProxy(collider, bounds));
+        }
+
+        AssertEqual(32, tree.ProxyCount);
+        AssertTrue(tree.Height <= 8, "balanced tree height should stay bounded for ordered inserts");
+        AssertTrue(tree.MaxBalance <= 1, "balanced tree should not contain a heavily skewed internal node");
+    }
+
     private static void TestWorldTransformSync()
     {
         World world = new World(new WorldSettings(false));
@@ -193,6 +212,30 @@ internal static class Program
         world.Update(fix.Zero);
 
         AssertEqual(0, world.BroadphasePairs.Count);
+    }
+
+    private static void TestBroadphaseRemovesStaleTreeProxies()
+    {
+        BroadCollisionSystem broadphase = new BroadCollisionSystem();
+        Collider collider0 = new Collider();
+        Collider collider1 = new Collider();
+        collider0.AddSphereCollider(1, fix3.zero, fix.One);
+        collider1.AddSphereCollider(2, new fix3(fix._1_5, fix.Zero, fix.Zero), fix.One);
+
+        broadphase.Collision(new Collider[] { collider0, collider1 });
+
+        AssertEqual(2, broadphase.TreeProxyCount);
+        AssertEqual(1, broadphase.Pairs.Count);
+
+        broadphase.Collision(new Collider[] { collider0 });
+
+        AssertEqual(1, broadphase.TreeProxyCount);
+        AssertEqual(0, broadphase.Pairs.Count);
+
+        broadphase.Collision(Array.Empty<Collider>());
+
+        AssertEqual(0, broadphase.TreeProxyCount);
+        AssertEqual(0, broadphase.Pairs.Count);
     }
 
     private static void TestWorldContactManifolds()

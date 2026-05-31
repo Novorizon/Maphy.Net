@@ -25,6 +25,31 @@ namespace Maphy.Physics
         }
 
         public int ProxyCount => proxyNodes.Count;
+        public int Height => root == NullNode ? 0 : nodes[root].height;
+
+        public int MaxBalance
+        {
+            get
+            {
+                int maxBalance = 0;
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    Node node = nodes[i];
+                    if (node.height <= 1 || node.IsLeaf)
+                    {
+                        continue;
+                    }
+
+                    int balance = System.Math.Abs(nodes[node.left].height - nodes[node.right].height);
+                    if (balance > maxBalance)
+                    {
+                        maxBalance = balance;
+                    }
+                }
+
+                return maxBalance;
+            }
+        }
 
         public void Clear()
         {
@@ -332,6 +357,7 @@ namespace Maphy.Physics
             int index = nodeId;
             while (index != NullNode)
             {
+                index = Balance(index);
                 Node node = nodes[index];
                 if (!node.IsLeaf)
                 {
@@ -344,6 +370,155 @@ namespace Maphy.Physics
 
                 index = nodes[index].parent;
             }
+        }
+
+        private int Balance(int nodeId)
+        {
+            Node node = nodes[nodeId];
+            if (node.IsLeaf || node.height < 2)
+            {
+                return nodeId;
+            }
+
+            int leftId = node.left;
+            int rightId = node.right;
+            Node left = nodes[leftId];
+            Node right = nodes[rightId];
+            int balance = right.height - left.height;
+
+            if (balance > 1)
+            {
+                return RotateLeft(nodeId, leftId, rightId);
+            }
+
+            if (balance < -1)
+            {
+                return RotateRight(nodeId, leftId, rightId);
+            }
+
+            return nodeId;
+        }
+
+        private int RotateLeft(int nodeId, int leftId, int rightId)
+        {
+            Node node = nodes[nodeId];
+            Node left = nodes[leftId];
+            Node right = nodes[rightId];
+            int rightLeftId = right.left;
+            int rightRightId = right.right;
+            Node rightLeft = nodes[rightLeftId];
+            Node rightRight = nodes[rightRightId];
+
+            right.left = nodeId;
+            right.parent = node.parent;
+            node.parent = rightId;
+
+            if (right.parent != NullNode)
+            {
+                Node parent = nodes[right.parent];
+                if (parent.left == nodeId)
+                {
+                    parent.left = rightId;
+                }
+                else
+                {
+                    parent.right = rightId;
+                }
+
+                nodes[right.parent] = parent;
+            }
+            else
+            {
+                root = rightId;
+            }
+
+            if (rightLeft.height > rightRight.height)
+            {
+                right.right = rightLeftId;
+                node.right = rightRightId;
+                rightRight.parent = nodeId;
+                node.bounds = Combine(left.bounds, rightRight.bounds);
+                right.bounds = Combine(node.bounds, rightLeft.bounds);
+                node.height = 1 + System.Math.Max(left.height, rightRight.height);
+                right.height = 1 + System.Math.Max(node.height, rightLeft.height);
+                nodes[rightRightId] = rightRight;
+            }
+            else
+            {
+                right.right = rightRightId;
+                node.right = rightLeftId;
+                rightLeft.parent = nodeId;
+                node.bounds = Combine(left.bounds, rightLeft.bounds);
+                right.bounds = Combine(node.bounds, rightRight.bounds);
+                node.height = 1 + System.Math.Max(left.height, rightLeft.height);
+                right.height = 1 + System.Math.Max(node.height, rightRight.height);
+                nodes[rightLeftId] = rightLeft;
+            }
+
+            nodes[nodeId] = node;
+            nodes[rightId] = right;
+            return rightId;
+        }
+
+        private int RotateRight(int nodeId, int leftId, int rightId)
+        {
+            Node node = nodes[nodeId];
+            Node left = nodes[leftId];
+            Node right = nodes[rightId];
+            int leftLeftId = left.left;
+            int leftRightId = left.right;
+            Node leftLeft = nodes[leftLeftId];
+            Node leftRight = nodes[leftRightId];
+
+            left.left = nodeId;
+            left.parent = node.parent;
+            node.parent = leftId;
+
+            if (left.parent != NullNode)
+            {
+                Node parent = nodes[left.parent];
+                if (parent.left == nodeId)
+                {
+                    parent.left = leftId;
+                }
+                else
+                {
+                    parent.right = leftId;
+                }
+
+                nodes[left.parent] = parent;
+            }
+            else
+            {
+                root = leftId;
+            }
+
+            if (leftLeft.height > leftRight.height)
+            {
+                left.right = leftLeftId;
+                node.left = leftRightId;
+                leftRight.parent = nodeId;
+                node.bounds = Combine(right.bounds, leftRight.bounds);
+                left.bounds = Combine(node.bounds, leftLeft.bounds);
+                node.height = 1 + System.Math.Max(right.height, leftRight.height);
+                left.height = 1 + System.Math.Max(node.height, leftLeft.height);
+                nodes[leftRightId] = leftRight;
+            }
+            else
+            {
+                left.right = leftRightId;
+                node.left = leftLeftId;
+                leftLeft.parent = nodeId;
+                node.bounds = Combine(right.bounds, leftLeft.bounds);
+                left.bounds = Combine(node.bounds, leftRight.bounds);
+                node.height = 1 + System.Math.Max(right.height, leftLeft.height);
+                left.height = 1 + System.Math.Max(node.height, leftRight.height);
+                nodes[leftLeftId] = leftLeft;
+            }
+
+            nodes[nodeId] = node;
+            nodes[leftId] = left;
+            return leftId;
         }
 
         private AABB CreateFatBounds(AABB bounds)
