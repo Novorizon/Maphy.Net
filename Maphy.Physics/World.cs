@@ -71,6 +71,7 @@ namespace Maphy.Physics
                 id = entity.id,
                 type = RigidType.Dynamic,
                 mass = fix._1,
+                inertia = fix3.one,
                 useGravity = settings.enableGravity,
             };
 
@@ -173,6 +174,18 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetAngularVelocity(ulong rigidId, fix3 angularVelocity)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.angularVelocity = angularVelocity;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
         public bool SetAcceleration(ulong rigidId, fix3 acceleration)
         {
             if (!rigids.TryGetValue(rigidId, out Rigid rigid))
@@ -185,6 +198,31 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetAngularAcceleration(ulong rigidId, fix3 angularAcceleration)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.angularAcceleration = angularAcceleration;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
+        public bool SetInertia(ulong rigidId, fix3 inertia)
+        {
+            if ((inertia.x < fix.Zero || inertia.y < fix.Zero || inertia.z < fix.Zero)
+                || !rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.inertia = inertia;
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
         public bool AddForce(ulong rigidId, fix3 force)
         {
             if (!rigids.TryGetValue(rigidId, out Rigid rigid))
@@ -193,6 +231,18 @@ namespace Maphy.Physics
             }
 
             rigid.AddForce(force);
+            rigids[rigidId] = rigid;
+            return true;
+        }
+
+        public bool AddTorque(ulong rigidId, fix3 torque)
+        {
+            if (!rigids.TryGetValue(rigidId, out Rigid rigid))
+            {
+                return false;
+            }
+
+            rigid.AddTorque(torque);
             rigids[rigidId] = rigid;
             return true;
         }
@@ -267,9 +317,10 @@ namespace Maphy.Physics
                     continue;
                 }
 
-                if (!rigid.IsDynamic || rigid.inverseMass == fix.Zero)
+                if (!rigid.IsDynamic)
                 {
                     rigid.ClearForces();
+                    rigid.ClearTorques();
                     rigids[rigidId] = rigid;
                     continue;
                 }
@@ -281,7 +332,9 @@ namespace Maphy.Physics
                 }
 
                 rigid.velocity += acceleration * deltaTime;
+                rigid.angularVelocity += (rigid.angularAcceleration + rigid.torque * rigid.inverseInertia) * deltaTime;
                 rigid.ClearForces();
+                rigid.ClearTorques();
                 rigids[rigidId] = rigid;
             }
         }
@@ -307,8 +360,28 @@ namespace Maphy.Physics
                 }
 
                 entity.translation += rigid.velocity * deltaTime;
+                entity.orientation = IntegrateOrientation(entity.orientation, rigid.angularVelocity, deltaTime);
                 entities[rigidId] = entity;
             }
+        }
+
+        private static quaternion IntegrateOrientation(quaternion orientation, fix3 angularVelocity, fix deltaTime)
+        {
+            fix speedSq = math.lengthsq(angularVelocity);
+            if (deltaTime <= fix.Zero || speedSq <= math.Epsilon)
+            {
+                return orientation;
+            }
+
+            fix speed = math.sqrt(speedSq);
+            fix angle = speed * deltaTime;
+            if (math.abs(angle) <= math.Epsilon)
+            {
+                return orientation;
+            }
+
+            quaternion deltaRotation = quaternion.AxisAngle(angularVelocity / speed, angle);
+            return quaternion.normalize(deltaRotation * orientation);
         }
 
         private void ResolveContacts()
@@ -327,13 +400,13 @@ namespace Maphy.Physics
 
                     for (int j = 0; j < manifold.contactCount; j++)
                     {
-                        ResolveContactVelocity(manifold);
+                        ResolveContactVelocity(manifold, manifold[j]);
                     }
                 }
             }
         }
 
-        private void ResolveContactVelocity(ContactManifold manifold)
+        private void ResolveContactVelocity(ContactManifold manifold, ContactPoint point)
         {
             bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
             bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
@@ -342,14 +415,10 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix inverseMassSum = inverseMass0 + inverseMass1;
-            if (inverseMassSum <= fix.Zero)
-            {
-                return;
-            }
-
-            fix3 velocity0 = hasRigid0 ? rigid0.velocity : fix3.zero;
-            fix3 velocity1 = hasRigid1 ? rigid1.velocity : fix3.zero;
+            fix3 r0 = hasRigid0 ? point.position - GetEntityPosition(rigid0.id) : fix3.zero;
+            fix3 r1 = hasRigid1 ? point.position - GetEntityPosition(rigid1.id) : fix3.zero;
+            fix3 velocity0 = hasRigid0 ? GetVelocityAtPoint(rigid0, r0) : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             if (normalVelocity > fix.Zero)
@@ -357,20 +426,30 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix normalImpulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / inverseMassSum / manifold.contactCount;
+            fix effectiveMass = inverseMass0 + inverseMass1
+                + GetAngularEffectiveMass(rigid0, r0, manifold.normal)
+                + GetAngularEffectiveMass(rigid1, r1, manifold.normal);
+            if (effectiveMass <= fix.Zero)
+            {
+                return;
+            }
+
+            fix normalImpulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / effectiveMass / manifold.contactCount;
             fix3 impulse = manifold.normal * normalImpulseMagnitude;
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
                 rigid0.velocity -= impulse * inverseMass0;
+                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, impulse);
             }
 
             if (hasRigid1 && inverseMass1 > fix.Zero)
             {
                 rigid1.velocity += impulse * inverseMass1;
+                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, impulse);
             }
 
-            ResolveContactFriction(manifold, hasRigid0, rigid0, inverseMass0, hasRigid1, rigid1, inverseMass1, inverseMassSum, normalImpulseMagnitude);
+            ResolveContactFriction(manifold, hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, normalImpulseMagnitude);
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
@@ -388,10 +467,11 @@ namespace Maphy.Physics
             bool hasRigid0,
             Rigid rigid0,
             fix inverseMass0,
+            fix3 r0,
             bool hasRigid1,
             Rigid rigid1,
             fix inverseMass1,
-            fix inverseMassSum,
+            fix3 r1,
             fix normalImpulseMagnitude)
         {
             fix friction = math.max(fix.Zero, settings.friction);
@@ -400,8 +480,8 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix3 velocity0 = hasRigid0 ? rigid0.velocity : fix3.zero;
-            fix3 velocity1 = hasRigid1 ? rigid1.velocity : fix3.zero;
+            fix3 velocity0 = hasRigid0 ? GetVelocityAtPoint(rigid0, r0) : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             fix3 tangentVelocity = relativeVelocity - manifold.normal * normalVelocity;
@@ -413,7 +493,15 @@ namespace Maphy.Physics
 
             fix tangentSpeed = math.sqrt(tangentSpeedSq);
             fix3 tangent = tangentVelocity / tangentSpeed;
-            fix frictionMagnitude = -math.dot(relativeVelocity, tangent) / inverseMassSum / manifold.contactCount;
+            fix effectiveMass = inverseMass0 + inverseMass1
+                + GetAngularEffectiveMass(rigid0, r0, tangent)
+                + GetAngularEffectiveMass(rigid1, r1, tangent);
+            if (effectiveMass <= fix.Zero)
+            {
+                return;
+            }
+
+            fix frictionMagnitude = -math.dot(relativeVelocity, tangent) / effectiveMass / manifold.contactCount;
             fix maxFriction = normalImpulseMagnitude * friction;
             frictionMagnitude = math.clamp(frictionMagnitude, -maxFriction, maxFriction);
             fix3 frictionImpulse = tangent * frictionMagnitude;
@@ -421,12 +509,35 @@ namespace Maphy.Physics
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
                 rigid0.velocity -= frictionImpulse * inverseMass0;
+                rigid0.angularVelocity -= rigid0.inverseInertia * math.cross(r0, frictionImpulse);
             }
 
             if (hasRigid1 && inverseMass1 > fix.Zero)
             {
                 rigid1.velocity += frictionImpulse * inverseMass1;
+                rigid1.angularVelocity += rigid1.inverseInertia * math.cross(r1, frictionImpulse);
             }
+        }
+
+        private fix3 GetEntityPosition(ulong entityId)
+        {
+            return entities.TryGetValue(entityId, out Entity entity) ? entity.translation : fix3.zero;
+        }
+
+        private static fix3 GetVelocityAtPoint(Rigid rigid, fix3 relativePoint)
+        {
+            return rigid.velocity + math.cross(rigid.angularVelocity, relativePoint);
+        }
+
+        private static fix GetAngularEffectiveMass(Rigid rigid, fix3 relativePoint, fix3 direction)
+        {
+            if (rigid == null || !rigid.IsDynamic)
+            {
+                return fix.Zero;
+            }
+
+            fix3 angularVelocityPerImpulse = rigid.inverseInertia * math.cross(relativePoint, direction);
+            return math.dot(math.cross(angularVelocityPerImpulse, relativePoint), direction);
         }
 
         private void CorrectPositions()

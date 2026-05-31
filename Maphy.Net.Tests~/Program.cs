@@ -30,6 +30,9 @@ internal static class Program
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
         Run("kinematic body pushes dynamic body", TestKinematicBodyPushesDynamicBody);
         Run("solver applies linear friction", TestSolverAppliesLinearFriction);
+        Run("world integrates angular velocity", TestWorldIntegratesAngularVelocity);
+        Run("world integrates torque", TestWorldIntegratesTorque);
+        Run("off center contact applies angular impulse", TestOffCenterContactAppliesAngularImpulse);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -297,14 +300,19 @@ internal static class Program
 
         world.SetRigidType(rigid.id, RigidType.Static);
         world.SetVelocity(rigid.id, new fix3(3, 0, 0));
+        world.SetAngularVelocity(rigid.id, new fix3(fix.Zero, fix.Zero, math.PI));
         world.SetAcceleration(rigid.id, new fix3(0, 5, 0));
+        world.SetAngularAcceleration(rigid.id, new fix3(fix.Zero, fix.Zero, fix.One));
         world.AddForce(rigid.id, new fix3(10, 0, 0));
+        world.AddTorque(rigid.id, new fix3(fix.Zero, fix.Zero, fix.One));
         world.Update(fix.One);
 
         AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "static entity should exist");
         AssertEqual(fix3.zero, entity.translation);
+        AssertEqual(quaternion.identity, entity.orientation);
         AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "static rigid should exist");
         AssertEqual(fix3.zero, syncedRigid.force);
+        AssertEqual(fix3.zero, syncedRigid.torque);
         AssertTrue(world.TryGetCollider(collider.id, out Collider syncedCollider), "static collider should exist");
         Sphere sphere = (Sphere)syncedCollider.shape;
         AssertEqual(fix3.zero, sphere.Center);
@@ -340,15 +348,21 @@ internal static class Program
 
         world.SetRigidType(rigid.id, RigidType.Kinematic);
         world.SetVelocity(rigid.id, new fix3(2, 0, 0));
+        world.SetAngularVelocity(rigid.id, new fix3(fix.Zero, fix.Zero, math.PI));
         world.SetAcceleration(rigid.id, new fix3(0, 5, 0));
+        world.SetAngularAcceleration(rigid.id, new fix3(fix.Zero, fix.Zero, fix.One));
         world.AddForce(rigid.id, new fix3(10, 0, 0));
+        world.AddTorque(rigid.id, new fix3(fix.Zero, fix.Zero, fix.One));
         world.Update(fix._0_5);
 
         AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "kinematic entity should exist");
         AssertEqual(new fix3(1, 0, 0), entity.translation);
+        AssertNear(fix3.up, entity.orientation * fix3.right, fix._0_01);
         AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "kinematic rigid should exist");
         AssertEqual(new fix3(2, 0, 0), syncedRigid.velocity);
+        AssertEqual(new fix3(fix.Zero, fix.Zero, math.PI), syncedRigid.angularVelocity);
         AssertEqual(fix3.zero, syncedRigid.force);
+        AssertEqual(fix3.zero, syncedRigid.torque);
     }
 
     private static void TestKinematicBodyPushesDynamicBody()
@@ -383,11 +397,57 @@ internal static class Program
         world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
 
         world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetInertia(dynamicRigid.id, fix3.zero);
         world.SetVelocity(dynamicRigid.id, new fix3(1, 1, 0));
         world.Update(fix.Zero);
 
         AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
         AssertEqual(fix3.zero, syncedDynamic.velocity);
+    }
+
+    private static void TestWorldIntegratesAngularVelocity()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetAngularVelocity(rigid.id, new fix3(fix.Zero, fix.Zero, math.PI));
+        world.Update(fix._0_5);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "entity should exist");
+        AssertNear(fix3.up, entity.orientation * fix3.right, fix._0_01);
+    }
+
+    private static void TestWorldIntegratesTorque()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetInertia(rigid.id, new fix3(2, 2, 2));
+        world.AddTorque(rigid.id, new fix3(fix.Zero, fix.Zero, fix._2));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        AssertEqual(new fix3(fix.Zero, fix.Zero, fix.One), syncedRigid.angularVelocity);
+        AssertEqual(fix3.zero, syncedRigid.torque);
+    }
+
+    private static void TestOffCenterContactAppliesAngularImpulse()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid boxRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid sphereRigid = world.CreateRigid(new fix3(fix._1_5, fix._0_5, fix.Zero), quaternion.identity);
+        world.AddAABBCollider(boxRigid.id, fix3.zero, new fix3(2, 2, 2));
+        world.AddSphereCollider(sphereRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(sphereRigid.id, RigidType.Static);
+        world.SetVelocity(boxRigid.id, fix3.right);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(boxRigid.id, out Rigid syncedBox), "box rigid should exist");
+        AssertTrue(syncedBox.angularVelocity.z > fix.Zero, "off center normal impulse should spin the dynamic body");
     }
 
     private static void Run(string name, Action test)
@@ -441,6 +501,23 @@ internal static class Program
         if (!expected.Equals(actual))
         {
             throw new InvalidOperationException($"Expected {expected}, got {actual}");
+        }
+    }
+
+    private static void AssertEqual(quaternion expected, quaternion actual)
+    {
+        if (expected != actual)
+        {
+            throw new InvalidOperationException($"Expected {expected.value}, got {actual.value}");
+        }
+    }
+
+    private static void AssertNear(fix3 expected, fix3 actual, fix tolerance)
+    {
+        fix3 delta = math.abs(expected - actual);
+        if (delta.x > tolerance || delta.y > tolerance || delta.z > tolerance)
+        {
+            throw new InvalidOperationException($"Expected {expected}, got {actual}, tolerance {tolerance}");
         }
     }
 
