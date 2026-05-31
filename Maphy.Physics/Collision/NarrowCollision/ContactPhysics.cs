@@ -14,6 +14,14 @@ namespace Maphy.Physics
 
             switch (shape0.Type, shape1.Type)
             {
+                case (ShapeType.AABB, ShapeType.AABB):
+                    return TryComputeBoxBoxContact(BoxData.FromAABB((AABB)shape0), BoxData.FromAABB((AABB)shape1), out collision);
+                case (ShapeType.AABB, ShapeType.OBB):
+                    return TryComputeBoxBoxContact(BoxData.FromAABB((AABB)shape0), BoxData.FromOBB((OBB)shape1), out collision);
+                case (ShapeType.OBB, ShapeType.AABB):
+                    return TryComputeBoxBoxContact(BoxData.FromOBB((OBB)shape0), BoxData.FromAABB((AABB)shape1), out collision);
+                case (ShapeType.OBB, ShapeType.OBB):
+                    return TryComputeBoxBoxContact(BoxData.FromOBB((OBB)shape0), BoxData.FromOBB((OBB)shape1), out collision);
                 case (ShapeType.Sphere, ShapeType.AABB):
                     return TryComputeSphereAABBContact((Sphere)shape0, (AABB)shape1, out collision);
                 case (ShapeType.AABB, ShapeType.Sphere):
@@ -67,6 +75,199 @@ namespace Maphy.Physics
 
             collision.SetPair(pair);
             return true;
+        }
+
+        private static bool TryComputeBoxBoxContact(BoxData box0, BoxData box1, out CollisionInfo collision)
+        {
+            collision = default;
+            fix penetrationDepth = fix.Max;
+            fix3 normal = fix3.zero;
+            int referenceAxisIndex = -1;
+            bool referenceIsBox0 = true;
+            bool faceContact = true;
+            fix3 delta = box1.center - box0.center;
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (!TestBoxAxis(box0, box1, box0.GetAxis(i), delta, i, true, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                {
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (!TestBoxAxis(box0, box1, box1.GetAxis(i), delta, i, false, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                {
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    fix3 axis = math.cross(box0.GetAxis(i), box1.GetAxis(j));
+                    if (math.lengthsq(axis) <= fix._0_0001)
+                    {
+                        continue;
+                    }
+
+                    if (!TestBoxAxis(box0, box1, axis, delta, -1, true, false, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            collision = new CollisionInfo(0, 0)
+            {
+                penetrationDepth = penetrationDepth,
+                normal = normal,
+            };
+
+            if (faceContact)
+            {
+                if (referenceIsBox0)
+                {
+                    AddBoxFaceContacts(box0, box1, normal, referenceAxisIndex, true, penetrationDepth, ref collision);
+                }
+                else
+                {
+                    AddBoxFaceContacts(box1, box0, -normal, referenceAxisIndex, false, penetrationDepth, ref collision);
+                }
+            }
+
+            if (!collision.hasContact)
+            {
+                collision.AddContact(GetSupportPoint(box0, normal), GetSupportPoint(box1, -normal), penetrationDepth);
+            }
+
+            return true;
+        }
+
+        private static bool TestBoxAxis(
+            BoxData box0,
+            BoxData box1,
+            fix3 axis,
+            fix3 delta,
+            int axisIndex,
+            bool axisFromBox0,
+            bool isFaceAxis,
+            ref fix bestPenetrationDepth,
+            ref fix3 bestNormal,
+            ref int bestReferenceAxisIndex,
+            ref bool bestReferenceIsBox0,
+            ref bool bestFaceContact)
+        {
+            fix lengthSq = math.lengthsq(axis);
+            if (lengthSq <= math.Epsilon)
+            {
+                return true;
+            }
+
+            axis = axis / math.sqrt(lengthSq);
+            fix distance = math.dot(delta, axis);
+            fix penetrationDepth = box0.ProjectRadius(axis) + box1.ProjectRadius(axis) - math.abs(distance);
+            if (penetrationDepth < fix.Zero)
+            {
+                return false;
+            }
+
+            if (penetrationDepth + fix._0_0001 < bestPenetrationDepth)
+            {
+                bestPenetrationDepth = penetrationDepth;
+                bestNormal = distance >= fix.Zero ? axis : -axis;
+                bestReferenceAxisIndex = axisIndex;
+                bestReferenceIsBox0 = axisFromBox0;
+                bestFaceContact = isFaceAxis;
+            }
+
+            return true;
+        }
+
+        private static void AddBoxFaceContacts(
+            BoxData reference,
+            BoxData incident,
+            fix3 normalFromReferenceToIncident,
+            int referenceAxisIndex,
+            bool referenceIsShape0,
+            fix penetrationDepth,
+            ref CollisionInfo collision)
+        {
+            if (referenceAxisIndex < 0)
+            {
+                return;
+            }
+
+            fix3 referenceAxis = reference.GetAxis(referenceAxisIndex);
+            fix normalSign = math.dot(referenceAxis, normalFromReferenceToIncident) >= fix.Zero ? fix.One : -fix.One;
+            fix3 normal = referenceAxis * normalSign;
+            int tangentIndex0 = (referenceAxisIndex + 1) % 3;
+            int tangentIndex1 = (referenceAxisIndex + 2) % 3;
+            fix3 tangent0 = reference.GetAxis(tangentIndex0);
+            fix3 tangent1 = reference.GetAxis(tangentIndex1);
+            fix facePlane = math.dot(reference.center, normal) + reference.GetExtent(referenceAxisIndex);
+
+            GetOverlapInterval(reference, incident, tangent0, tangentIndex0, out fix min0, out fix max0);
+            GetOverlapInterval(reference, incident, tangent1, tangentIndex1, out fix min1, out fix max1);
+            if (min0 > max0 || min1 > max1)
+            {
+                return;
+            }
+
+            fix incidentPlane = math.dot(incident.center, normal) - incident.ProjectRadius(normal);
+            fix depth = math.max(fix.Zero, facePlane - incidentPlane);
+            fix contactDepth = math.max(penetrationDepth, depth);
+            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, min0, min1, incidentPlane, contactDepth, ref collision);
+            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, min0, max1, incidentPlane, contactDepth, ref collision);
+            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, max0, min1, incidentPlane, contactDepth, ref collision);
+            AddBoxFaceContact(referenceIsShape0, normal, facePlane, tangent0, tangent1, max0, max1, incidentPlane, contactDepth, ref collision);
+        }
+
+        private static void AddBoxFaceContact(
+            bool referenceIsShape0,
+            fix3 normal,
+            fix facePlane,
+            fix3 tangent0,
+            fix3 tangent1,
+            fix tangentDistance0,
+            fix tangentDistance1,
+            fix incidentPlane,
+            fix penetrationDepth,
+            ref CollisionInfo collision)
+        {
+            fix3 pointOnReference = normal * facePlane + tangent0 * tangentDistance0 + tangent1 * tangentDistance1;
+            fix3 pointOnIncident = pointOnReference - normal * (facePlane - incidentPlane);
+            if (referenceIsShape0)
+            {
+                collision.AddContact(pointOnReference, pointOnIncident, penetrationDepth);
+            }
+            else
+            {
+                collision.AddContact(pointOnIncident, pointOnReference, penetrationDepth);
+            }
+        }
+
+        private static void GetOverlapInterval(BoxData reference, BoxData incident, fix3 axis, int referenceExtentIndex, out fix min, out fix max)
+        {
+            fix referenceCenter = math.dot(reference.center, axis);
+            fix referenceMin = referenceCenter - reference.GetExtent(referenceExtentIndex);
+            fix referenceMax = referenceCenter + reference.GetExtent(referenceExtentIndex);
+            fix incidentCenter = math.dot(incident.center, axis);
+            fix incidentRadius = incident.ProjectRadius(axis);
+            fix incidentMin = incidentCenter - incidentRadius;
+            fix incidentMax = incidentCenter + incidentRadius;
+            min = math.max(referenceMin, incidentMin);
+            max = math.min(referenceMax, incidentMax);
+        }
+
+        private static fix3 GetSupportPoint(BoxData box, fix3 direction)
+        {
+            return box.center
+                + box.axis0 * (math.dot(box.axis0, direction) >= fix.Zero ? box.extents.x : -box.extents.x)
+                + box.axis1 * (math.dot(box.axis1, direction) >= fix.Zero ? box.extents.y : -box.extents.y)
+                + box.axis2 * (math.dot(box.axis2, direction) >= fix.Zero ? box.extents.z : -box.extents.z);
         }
 
         private static bool TryComputeSphereSphereContact(Sphere a, Sphere b, out CollisionInfo collision)
@@ -393,6 +594,72 @@ namespace Maphy.Physics
 
             normal = localPoint.z >= fix.Zero ? fix3.forward : fix3.backward;
             return new fix3(localPoint.x, localPoint.y, normal.z * extents.z);
+        }
+
+        private readonly struct BoxData
+        {
+            public readonly fix3 center;
+            public readonly fix3 extents;
+            public readonly fix3 axis0;
+            public readonly fix3 axis1;
+            public readonly fix3 axis2;
+
+            private BoxData(fix3 center, fix3 extents, fix3 axis0, fix3 axis1, fix3 axis2)
+            {
+                this.center = center;
+                this.extents = extents;
+                this.axis0 = axis0;
+                this.axis1 = axis1;
+                this.axis2 = axis2;
+            }
+
+            public static BoxData FromAABB(AABB aabb)
+            {
+                return new BoxData(aabb.center, aabb.extents, fix3.right, fix3.up, fix3.forward);
+            }
+
+            public static BoxData FromOBB(OBB obb)
+            {
+                return new BoxData(
+                    obb.center,
+                    obb.extents,
+                    obb.orientation * fix3.right,
+                    obb.orientation * fix3.up,
+                    obb.orientation * fix3.forward);
+            }
+
+            public fix3 GetAxis(int index)
+            {
+                switch (index)
+                {
+                    case 0:
+                        return axis0;
+                    case 1:
+                        return axis1;
+                    default:
+                        return axis2;
+                }
+            }
+
+            public fix GetExtent(int index)
+            {
+                switch (index)
+                {
+                    case 0:
+                        return extents.x;
+                    case 1:
+                        return extents.y;
+                    default:
+                        return extents.z;
+                }
+            }
+
+            public fix ProjectRadius(fix3 axis)
+            {
+                return extents.x * math.abs(math.dot(axis0, axis))
+                    + extents.y * math.abs(math.dot(axis1, axis))
+                    + extents.z * math.abs(math.dot(axis2, axis));
+            }
         }
     }
 }

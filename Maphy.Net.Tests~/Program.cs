@@ -32,6 +32,7 @@ internal static class Program
         Run("world builds contact manifolds", TestWorldContactManifolds);
         Run("contact solver preserves warm start impulses", TestContactSolverPreservesWarmStartImpulses);
         Run("box face contact builds multi point manifold", TestBoxFaceContactBuildsMultiPointManifold);
+        Run("OBB contact uses oriented SAT normal", TestOBBContactUsesOrientedSATNormal);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
@@ -376,6 +377,19 @@ internal static class Program
         AssertEqual(4, world.ContactManifolds[0].contactCount);
         AssertEqual(fix3.right, world.ContactManifolds[0].normal);
         AssertEqual(fix._0_5, world.ContactManifolds[0][0].penetrationDepth);
+    }
+
+    private static void TestOBBContactUsesOrientedSATNormal()
+    {
+        quaternion rotation = quaternion.RotateZ(math.PI * fix._0_25);
+        fix3 normal = rotation * fix3.right;
+        OBB box0 = new OBB(fix3.zero, new fix3(2, 2, 2), rotation);
+        OBB box1 = new OBB(normal * fix._1_5, new fix3(2, 2, 2), rotation);
+
+        AssertTrue(PhysicsApi.TryComputeContact(box0, box1, out CollisionInfo collision), "rotated boxes should produce contact");
+        AssertNear(normal, collision.normal, fix._0_01);
+        AssertEqual(4, collision.contactCount);
+        AssertTrue(math.abs(collision.penetrationDepth - fix._0_5) <= fix._0_0001, "rotated box penetration should be close to expected overlap");
     }
 
     private static void TestWorldContactManifolds()
