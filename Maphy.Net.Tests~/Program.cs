@@ -25,6 +25,11 @@ internal static class Program
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
         Run("world dispatches collision callbacks", TestWorldDispatchesCollisionCallbacks);
         Run("trigger reports contact without solver response", TestTriggerReportsContactWithoutSolverResponse);
+        Run("static rigid ignores motion and forces", TestStaticRigidIgnoresMotionAndForces);
+        Run("dynamic body resolves against static body", TestDynamicBodyResolvesAgainstStaticBody);
+        Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
+        Run("kinematic body pushes dynamic body", TestKinematicBodyPushesDynamicBody);
+        Run("solver applies linear friction", TestSolverAppliesLinearFriction);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -282,6 +287,107 @@ internal static class Program
         AssertEqual(new fix3(fix._1_5, fix.Zero, fix.Zero), entity1.translation);
         AssertTrue(collider0.isTrigger == false, "first collider should not be trigger");
         AssertTrue(collider1.isTrigger, "second collider should be trigger");
+    }
+
+    private static void TestStaticRigidIgnoresMotionAndForces()
+    {
+        World world = new World(new WorldSettings(true, -10));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Collider collider = world.AddSphereCollider(rigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(rigid.id, RigidType.Static);
+        world.SetVelocity(rigid.id, new fix3(3, 0, 0));
+        world.SetAcceleration(rigid.id, new fix3(0, 5, 0));
+        world.AddForce(rigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "static entity should exist");
+        AssertEqual(fix3.zero, entity.translation);
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "static rigid should exist");
+        AssertEqual(fix3.zero, syncedRigid.force);
+        AssertTrue(world.TryGetCollider(collider.id, out Collider syncedCollider), "static collider should exist");
+        Sphere sphere = (Sphere)syncedCollider.shape;
+        AssertEqual(fix3.zero, sphere.Center);
+    }
+
+    private static void TestDynamicBodyResolvesAgainstStaticBody()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.One;
+        settings.penetrationSlop = fix.Zero;
+        World world = new World(settings);
+        Rigid staticRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid dynamicRigid = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, fix3.left);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetEntity(staticRigid.id, out Entity staticEntity), "static entity should exist");
+        AssertTrue(world.TryGetEntity(dynamicRigid.id, out Entity dynamicEntity), "dynamic entity should exist");
+        AssertEqual(fix3.zero, staticEntity.translation);
+        AssertEqual(new fix3(2, 0, 0), dynamicEntity.translation);
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertEqual(fix3.zero, syncedDynamic.velocity);
+    }
+
+    private static void TestKinematicRigidMovesWithoutForceIntegration()
+    {
+        World world = new World(new WorldSettings(true, -10));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.SetRigidType(rigid.id, RigidType.Kinematic);
+        world.SetVelocity(rigid.id, new fix3(2, 0, 0));
+        world.SetAcceleration(rigid.id, new fix3(0, 5, 0));
+        world.AddForce(rigid.id, new fix3(10, 0, 0));
+        world.Update(fix._0_5);
+
+        AssertTrue(world.TryGetEntity(rigid.id, out Entity entity), "kinematic entity should exist");
+        AssertEqual(new fix3(1, 0, 0), entity.translation);
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "kinematic rigid should exist");
+        AssertEqual(new fix3(2, 0, 0), syncedRigid.velocity);
+        AssertEqual(fix3.zero, syncedRigid.force);
+    }
+
+    private static void TestKinematicBodyPushesDynamicBody()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid kinematicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid dynamicRigid = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(kinematicRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(kinematicRigid.id, RigidType.Kinematic);
+        world.SetVelocity(kinematicRigid.id, fix3.right);
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(kinematicRigid.id, out Rigid syncedKinematic), "kinematic rigid should exist");
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertEqual(fix3.right, syncedKinematic.velocity);
+        AssertEqual(fix3.right, syncedDynamic.velocity);
+    }
+
+    private static void TestSolverAppliesLinearFriction()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix.One;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(dynamicRigid.id, new fix3(1, 1, 0));
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertEqual(fix3.zero, syncedDynamic.velocity);
     }
 
     private static void Run(string name, Action test)

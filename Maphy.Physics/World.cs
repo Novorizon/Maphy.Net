@@ -313,18 +313,22 @@ namespace Maphy.Physics
 
         private void ResolveContacts()
         {
+            int solverIterations = settings.solverIterations > 0 ? settings.solverIterations : 1;
             IReadOnlyList<ContactManifold> manifolds = collisionSystem.ContactManifolds;
-            for (int i = 0; i < manifolds.Count; i++)
+            for (int iteration = 0; iteration < solverIterations; iteration++)
             {
-                ContactManifold manifold = manifolds[i];
-                if (manifold.isTrigger)
+                for (int i = 0; i < manifolds.Count; i++)
                 {
-                    continue;
-                }
+                    ContactManifold manifold = manifolds[i];
+                    if (manifold.isTrigger)
+                    {
+                        continue;
+                    }
 
-                for (int j = 0; j < manifold.contactCount; j++)
-                {
-                    ResolveContactVelocity(manifold);
+                    for (int j = 0; j < manifold.contactCount; j++)
+                    {
+                        ResolveContactVelocity(manifold);
+                    }
                 }
             }
         }
@@ -353,19 +357,75 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix impulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / inverseMassSum / manifold.contactCount;
-            fix3 impulse = manifold.normal * impulseMagnitude;
+            fix normalImpulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / inverseMassSum / manifold.contactCount;
+            fix3 impulse = manifold.normal * normalImpulseMagnitude;
 
             if (hasRigid0 && inverseMass0 > fix.Zero)
             {
                 rigid0.velocity -= impulse * inverseMass0;
-                rigids[rigid0.id] = rigid0;
             }
 
             if (hasRigid1 && inverseMass1 > fix.Zero)
             {
                 rigid1.velocity += impulse * inverseMass1;
+            }
+
+            ResolveContactFriction(manifold, hasRigid0, rigid0, inverseMass0, hasRigid1, rigid1, inverseMass1, inverseMassSum, normalImpulseMagnitude);
+
+            if (hasRigid0 && inverseMass0 > fix.Zero)
+            {
+                rigids[rigid0.id] = rigid0;
+            }
+
+            if (hasRigid1 && inverseMass1 > fix.Zero)
+            {
                 rigids[rigid1.id] = rigid1;
+            }
+        }
+
+        private void ResolveContactFriction(
+            ContactManifold manifold,
+            bool hasRigid0,
+            Rigid rigid0,
+            fix inverseMass0,
+            bool hasRigid1,
+            Rigid rigid1,
+            fix inverseMass1,
+            fix inverseMassSum,
+            fix normalImpulseMagnitude)
+        {
+            fix friction = math.max(fix.Zero, settings.friction);
+            if (friction <= fix.Zero || normalImpulseMagnitude <= fix.Zero)
+            {
+                return;
+            }
+
+            fix3 velocity0 = hasRigid0 ? rigid0.velocity : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? rigid1.velocity : fix3.zero;
+            fix3 relativeVelocity = velocity1 - velocity0;
+            fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
+            fix3 tangentVelocity = relativeVelocity - manifold.normal * normalVelocity;
+            fix tangentSpeedSq = math.lengthsq(tangentVelocity);
+            if (tangentSpeedSq <= math.Epsilon)
+            {
+                return;
+            }
+
+            fix tangentSpeed = math.sqrt(tangentSpeedSq);
+            fix3 tangent = tangentVelocity / tangentSpeed;
+            fix frictionMagnitude = -math.dot(relativeVelocity, tangent) / inverseMassSum / manifold.contactCount;
+            fix maxFriction = normalImpulseMagnitude * friction;
+            frictionMagnitude = math.clamp(frictionMagnitude, -maxFriction, maxFriction);
+            fix3 frictionImpulse = tangent * frictionMagnitude;
+
+            if (hasRigid0 && inverseMass0 > fix.Zero)
+            {
+                rigid0.velocity -= frictionImpulse * inverseMass0;
+            }
+
+            if (hasRigid1 && inverseMass1 > fix.Zero)
+            {
+                rigid1.velocity += frictionImpulse * inverseMass1;
             }
         }
 
