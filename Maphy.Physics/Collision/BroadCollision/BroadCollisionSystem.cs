@@ -113,39 +113,81 @@ namespace Maphy.Physics
 
     public sealed class BroadCollisionSystem
     {
+        private readonly DynamicAABBTree tree = new DynamicAABBTree();
         private readonly List<BroadphaseProxy> proxies = new List<BroadphaseProxy>();
         private readonly List<BroadCollisionPair> broadCollisionPairs = new List<BroadCollisionPair>();
+        private readonly Dictionary<ulong, BroadphaseProxy> proxiesById = new Dictionary<ulong, BroadphaseProxy>();
+        private readonly HashSet<ulong> activeColliderIds = new HashSet<ulong>();
+        private readonly List<ulong> staleColliderIds = new List<ulong>();
+        private readonly List<BroadphaseProxy> queryResults = new List<BroadphaseProxy>();
+        private readonly HashSet<BroadCollisionPairKey> pairKeys = new HashSet<BroadCollisionPairKey>();
+        private readonly List<BroadCollisionPairKey> sortedPairKeys = new List<BroadCollisionPairKey>();
 
         public IReadOnlyList<BroadphaseProxy> Proxies => proxies;
         public IReadOnlyList<BroadCollisionPair> Pairs => broadCollisionPairs;
+        public int TreeProxyCount => tree.ProxyCount;
 
         public void Clear()
         {
+            tree.Clear();
             proxies.Clear();
             broadCollisionPairs.Clear();
+            proxiesById.Clear();
+            activeColliderIds.Clear();
+            staleColliderIds.Clear();
+            queryResults.Clear();
+            pairKeys.Clear();
+            sortedPairKeys.Clear();
         }
 
         public IReadOnlyList<BroadCollisionPair> Collision(IEnumerable<Collider> colliders)
         {
             proxies.Clear();
             broadCollisionPairs.Clear();
+            proxiesById.Clear();
+            activeColliderIds.Clear();
+            pairKeys.Clear();
+            sortedPairKeys.Clear();
 
             foreach (Collider collider in colliders)
             {
                 if (collider.shape != null)
                 {
-                    proxies.Add(new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape)));
+                    BroadphaseProxy proxy = new BroadphaseProxy(collider, Physics.ComputeBounds(collider.shape));
+                    proxies.Add(proxy);
+                    proxiesById[proxy.colliderId] = proxy;
+                    activeColliderIds.Add(proxy.colliderId);
+                    tree.MoveProxy(proxy);
                 }
             }
 
+            tree.RemoveExcept(activeColliderIds, staleColliderIds);
+
             for (int i = 0; i < proxies.Count; i++)
             {
-                for (int j = i + 1; j < proxies.Count; j++)
+                BroadphaseProxy proxy = proxies[i];
+                queryResults.Clear();
+                tree.Query(proxy.bounds, queryResults);
+
+                for (int j = 0; j < queryResults.Count; j++)
                 {
-                    if (IsBroadCollision(proxies[i], proxies[j]))
+                    BroadphaseProxy other = queryResults[j];
+                    if (IsBroadCollision(proxy, other))
                     {
-                        broadCollisionPairs.Add(new BroadCollisionPair(proxies[i], proxies[j]));
+                        pairKeys.Add(new BroadCollisionPairKey(proxy.colliderId, other.colliderId));
                     }
+                }
+            }
+
+            sortedPairKeys.AddRange(pairKeys);
+            sortedPairKeys.Sort(ComparePairKeys);
+            for (int i = 0; i < sortedPairKeys.Count; i++)
+            {
+                BroadCollisionPairKey key = sortedPairKeys[i];
+                if (proxiesById.TryGetValue(key.colliderId0, out BroadphaseProxy proxy0)
+                    && proxiesById.TryGetValue(key.colliderId1, out BroadphaseProxy proxy1))
+                {
+                    broadCollisionPairs.Add(new BroadCollisionPair(proxy0, proxy1));
                 }
             }
 
@@ -177,6 +219,12 @@ namespace Maphy.Physics
             }
 
             return Physics.IsOverlap(a.bounds, b.bounds);
+        }
+
+        private static int ComparePairKeys(BroadCollisionPairKey a, BroadCollisionPairKey b)
+        {
+            int first = a.colliderId0.CompareTo(b.colliderId0);
+            return first != 0 ? first : a.colliderId1.CompareTo(b.colliderId1);
         }
     }
 }
