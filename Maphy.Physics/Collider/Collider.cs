@@ -2,7 +2,7 @@ using Maphy.Mathematics;
 
 namespace Maphy.Physics
 {
-    public struct Collider
+    public class Collider
     {
         public static ulong Id = 0;
 
@@ -102,6 +102,11 @@ namespace Maphy.Physics
                 collisionInfo = value;
                 OnCollision?.Invoke(collisionInfo);
             }
+        }
+
+        public void SetTrigger(bool isTrigger)
+        {
+            this.isTrigger = isTrigger;
         }
 
         public delegate void CollisionCallback(CollisionInfo collision);

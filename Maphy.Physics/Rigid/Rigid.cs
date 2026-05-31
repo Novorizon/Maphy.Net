@@ -9,7 +9,7 @@ namespace Maphy.Physics
         Dynamic = 2
     }
 
-    public struct Rigid
+    public class Rigid
     {
         public ulong id;
         public ulong colliderId;

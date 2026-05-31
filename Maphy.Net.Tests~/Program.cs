@@ -23,6 +23,8 @@ internal static class Program
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world resolves collision impulse", TestWorldResolvesCollisionImpulse);
         Run("world applies position correction", TestWorldAppliesPositionCorrection);
+        Run("world dispatches collision callbacks", TestWorldDispatchesCollisionCallbacks);
+        Run("trigger reports contact without solver response", TestTriggerReportsContactWithoutSolverResponse);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -209,6 +211,79 @@ internal static class Program
         AssertEqual(new fix3(fix._1_5 + fix._0_25, fix.Zero, fix.Zero), entity1.translation);
     }
 
+    private static void TestWorldDispatchesCollisionCallbacks()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int collider0Count = 0;
+        int collider1Count = 0;
+        int rigid0Count = 0;
+        int rigid1Count = 0;
+        CollisionInfo collider0Collision = default;
+        CollisionInfo collider1Collision = default;
+
+        collider0.OnCollision += collision =>
+        {
+            collider0Count++;
+            collider0Collision = collision;
+        };
+        collider1.OnCollision += collision =>
+        {
+            collider1Count++;
+            collider1Collision = collision;
+        };
+        rigid0.OnCollision += collision => rigid0Count++;
+        rigid1.OnCollision += collision => rigid1Count++;
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, collider0Count);
+        AssertEqual(1, collider1Count);
+        AssertEqual(1, rigid0Count);
+        AssertEqual(1, rigid1Count);
+        AssertEqual(collider0.id, collider0Collision.id);
+        AssertEqual(collider1.id, collider0Collision.otherId);
+        AssertEqual(collider1.id, collider1Collision.id);
+        AssertEqual(collider0.id, collider1Collision.otherId);
+        AssertEqual(-collider0Collision.normal, collider1Collision.normal);
+    }
+
+    private static void TestTriggerReportsContactWithoutSolverResponse()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.One;
+        settings.penetrationSlop = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        Collider collider1 = world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        int triggerCount = 0;
+
+        collider1.OnCollision += collision => triggerCount++;
+        world.SetColliderTrigger(collider1.id, true);
+        world.SetVelocity(rigid0.id, fix3.right);
+        world.SetVelocity(rigid1.id, fix3.left);
+        world.Update(fix.Zero);
+
+        AssertEqual(1, triggerCount);
+        AssertEqual(1, world.ContactManifolds.Count);
+        AssertTrue(world.ContactManifolds[0].isTrigger, "trigger manifold should be marked");
+        AssertTrue(world.TryGetRigid(rigid0.id, out Rigid synced0), "first rigid should exist");
+        AssertTrue(world.TryGetRigid(rigid1.id, out Rigid synced1), "second rigid should exist");
+        AssertEqual(fix3.right, synced0.velocity);
+        AssertEqual(fix3.left, synced1.velocity);
+        AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first entity should exist");
+        AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second entity should exist");
+        AssertEqual(fix3.zero, entity0.translation);
+        AssertEqual(new fix3(fix._1_5, fix.Zero, fix.Zero), entity1.translation);
+        AssertTrue(collider0.isTrigger == false, "first collider should not be trigger");
+        AssertTrue(collider1.isTrigger, "second collider should be trigger");
+    }
+
     private static void Run(string name, Action test)
     {
         try
@@ -264,6 +339,14 @@ internal static class Program
     }
 
     private static void AssertEqual(int expected, int actual)
+    {
+        if (expected != actual)
+        {
+            throw new InvalidOperationException($"Expected {expected}, got {actual}");
+        }
+    }
+
+    private static void AssertEqual(ulong expected, ulong actual)
     {
         if (expected != actual)
         {

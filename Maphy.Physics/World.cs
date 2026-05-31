@@ -51,6 +51,7 @@ namespace Maphy.Physics
             ResolveContacts();
             CorrectPositions();
             SyncColliders();
+            DispatchCollisionCallbacks();
         }
 
         public Entity CreateEntity()
@@ -196,6 +197,17 @@ namespace Maphy.Physics
             return true;
         }
 
+        public bool SetColliderTrigger(ulong colliderId, bool isTrigger)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            collider.SetTrigger(isTrigger);
+            return true;
+        }
+
         public Collider AddAABBCollider(ulong rigidId, fix3 center, fix3 size)
         {
             Collider collider = new Collider();
@@ -305,6 +317,11 @@ namespace Maphy.Physics
             for (int i = 0; i < manifolds.Count; i++)
             {
                 ContactManifold manifold = manifolds[i];
+                if (manifold.isTrigger)
+                {
+                    continue;
+                }
+
                 for (int j = 0; j < manifold.contactCount; j++)
                 {
                     ResolveContactVelocity(manifold);
@@ -327,7 +344,9 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix3 relativeVelocity = rigid1.velocity - rigid0.velocity;
+            fix3 velocity0 = hasRigid0 ? rigid0.velocity : fix3.zero;
+            fix3 velocity1 = hasRigid1 ? rigid1.velocity : fix3.zero;
+            fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             if (normalVelocity > fix.Zero)
             {
@@ -337,13 +356,13 @@ namespace Maphy.Physics
             fix impulseMagnitude = -(fix.One + settings.restitution) * normalVelocity / inverseMassSum / manifold.contactCount;
             fix3 impulse = manifold.normal * impulseMagnitude;
 
-            if (inverseMass0 > fix.Zero)
+            if (hasRigid0 && inverseMass0 > fix.Zero)
             {
                 rigid0.velocity -= impulse * inverseMass0;
                 rigids[rigid0.id] = rigid0;
             }
 
-            if (inverseMass1 > fix.Zero)
+            if (hasRigid1 && inverseMass1 > fix.Zero)
             {
                 rigid1.velocity += impulse * inverseMass1;
                 rigids[rigid1.id] = rigid1;
@@ -356,6 +375,11 @@ namespace Maphy.Physics
             for (int i = 0; i < manifolds.Count; i++)
             {
                 ContactManifold manifold = manifolds[i];
+                if (manifold.isTrigger)
+                {
+                    continue;
+                }
+
                 bool hasRigid0 = TryGetRigidMassData(manifold.rigidId0, out Rigid rigid0, out fix inverseMass0);
                 bool hasRigid1 = TryGetRigidMassData(manifold.rigidId1, out Rigid rigid1, out fix inverseMass1);
                 if (!hasRigid0 && !hasRigid1)
@@ -379,12 +403,12 @@ namespace Maphy.Physics
                     }
 
                     fix3 correction = manifold.normal * (penetration * settings.positionCorrectionPercent / inverseMassSum);
-                    if (inverseMass0 > fix.Zero)
+                    if (hasRigid0 && inverseMass0 > fix.Zero)
                     {
                         TranslateEntity(rigid0.id, -correction * inverseMass0);
                     }
 
-                    if (inverseMass1 > fix.Zero)
+                    if (hasRigid1 && inverseMass1 > fix.Zero)
                     {
                         TranslateEntity(rigid1.id, correction * inverseMass1);
                     }
@@ -414,6 +438,30 @@ namespace Maphy.Physics
 
             entity.translation += delta;
             entities[entityId] = entity;
+        }
+
+        private void DispatchCollisionCallbacks()
+        {
+            IReadOnlyList<NarrowCollisionSystem.CollisionPair> pairs = collisionSystem.CollisionPairs;
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                NarrowCollisionSystem.CollisionPair pair = pairs[i];
+                CollisionInfo collision0 = pair.collision;
+                CollisionInfo collision1 = collision0.Flipped();
+
+                pair.collider0.collision = collision0;
+                pair.collider1.collision = collision1;
+
+                if (rigids.TryGetValue(pair.rigidId0, out Rigid rigid0))
+                {
+                    rigid0.Listener(collision0);
+                }
+
+                if (rigids.TryGetValue(pair.rigidId1, out Rigid rigid1))
+                {
+                    rigid1.Listener(collision1);
+                }
+            }
         }
 
         private Collider RegisterCollider(Collider collider)

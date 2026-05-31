@@ -50,6 +50,7 @@ namespace Maphy.Physics
         public fix3 normal { get; private set; }
         public int contactCount { get; private set; }
         public int lastUpdatedFrame { get; private set; }
+        public bool isTrigger { get; private set; }
 
         public ContactPoint this[int index]
         {
@@ -74,7 +75,7 @@ namespace Maphy.Physics
             }
         }
 
-        public void Update(CollisionInfo collision, int frameIndex)
+        public void Update(CollisionInfo collision, bool isTrigger, int frameIndex)
         {
             bool preserveImpulse = TryFindPersistentPoint(collision.contactPoint, out ContactPoint previous);
 
@@ -86,6 +87,7 @@ namespace Maphy.Physics
             normal = collision.normal;
             contactCount = 1;
             lastUpdatedFrame = frameIndex;
+            this.isTrigger = isTrigger;
 
             point0 = new ContactPoint(
                 collision.contactPoint,
@@ -175,7 +177,7 @@ namespace Maphy.Physics
                     manifoldsByKey.Add(pair.key, manifold);
                 }
 
-                manifold.Update(pair.collision, frameIndex);
+                manifold.Update(pair.collision, pair.collider0.isTrigger || pair.collider1.isTrigger, frameIndex);
                 activeManifolds.Add(manifold);
             }
 
