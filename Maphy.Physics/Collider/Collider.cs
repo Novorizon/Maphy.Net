@@ -23,7 +23,7 @@ namespace Maphy.Physics
             localCenter = center;
             localOrientation = quaternion.identity;
             shape = new AABB(center, size);
-            material = new Material();
+            material = Material.Default;
             isTrigger = false;
             collisionInfo = new CollisionInfo();
         }
@@ -35,7 +35,7 @@ namespace Maphy.Physics
             localCenter = center;
             localOrientation = rotation;
             shape = new OBB(center, size, rotation);
-            material = new Material();
+            material = Material.Default;
             isTrigger = false;
             collisionInfo = new CollisionInfo();
         }
@@ -47,7 +47,7 @@ namespace Maphy.Physics
             localCenter = center;
             localOrientation = quaternion.identity;
             shape = new Sphere(center, radius);
-            material = new Material();
+            material = Material.Default;
             isTrigger = false;
             collisionInfo = new CollisionInfo();
         }
@@ -59,7 +59,7 @@ namespace Maphy.Physics
             localCenter = center;
             localOrientation = rotation;
             shape = new Capsule(center, radius, height, rotation, fix3.up);
-            material = new Material();
+            material = Material.Default;
             isTrigger = false;
             collisionInfo = new CollisionInfo();
         }
@@ -107,6 +107,11 @@ namespace Maphy.Physics
         public void SetTrigger(bool isTrigger)
         {
             this.isTrigger = isTrigger;
+        }
+
+        public void SetMaterial(Material material)
+        {
+            this.material = material;
         }
 
         public delegate void CollisionCallback(CollisionInfo collision);

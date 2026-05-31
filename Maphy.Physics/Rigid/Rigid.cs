@@ -23,6 +23,8 @@ namespace Maphy.Physics
         public fix3 inertia;
         public fix mass;
         public bool useGravity;
+        public bool autoMass;
+        public bool autoInertia;
 
         public bool IsDynamic => type == RigidType.Dynamic;
         public bool IsKinematic => type == RigidType.Kinematic;

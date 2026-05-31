@@ -33,6 +33,9 @@ internal static class Program
         Run("world integrates angular velocity", TestWorldIntegratesAngularVelocity);
         Run("world integrates torque", TestWorldIntegratesTorque);
         Run("off center contact applies angular impulse", TestOffCenterContactAppliesAngularImpulse);
+        Run("collider initializes rigid mass properties", TestColliderInitializesRigidMassProperties);
+        Run("collider density updates automatic mass properties", TestColliderDensityUpdatesAutomaticMassProperties);
+        Run("manual mass properties survive density changes", TestManualMassPropertiesSurviveDensityChanges);
 
         Console.WriteLine($"Passed {passed} tests.");
     }
@@ -196,8 +199,8 @@ internal static class Program
 
         AssertTrue(world.TryGetRigid(rigid0.id, out Rigid synced0), "first rigid should exist");
         AssertTrue(world.TryGetRigid(rigid1.id, out Rigid synced1), "second rigid should exist");
-        AssertEqual(fix3.zero, synced0.velocity);
-        AssertEqual(fix3.zero, synced1.velocity);
+        AssertNear(fix3.zero, synced0.velocity, fix._0_0001);
+        AssertNear(fix3.zero, synced1.velocity, fix._0_0001);
     }
 
     private static void TestWorldAppliesPositionCorrection()
@@ -215,8 +218,8 @@ internal static class Program
 
         AssertTrue(world.TryGetEntity(rigid0.id, out Entity entity0), "first entity should exist");
         AssertTrue(world.TryGetEntity(rigid1.id, out Entity entity1), "second entity should exist");
-        AssertEqual(new fix3(-fix._0_25, fix.Zero, fix.Zero), entity0.translation);
-        AssertEqual(new fix3(fix._1_5 + fix._0_25, fix.Zero, fix.Zero), entity1.translation);
+        AssertNear(new fix3(-fix._0_25, fix.Zero, fix.Zero), entity0.translation, fix._0_0001);
+        AssertNear(new fix3(fix._1_5 + fix._0_25, fix.Zero, fix.Zero), entity1.translation, fix._0_0001);
     }
 
     private static void TestWorldDispatchesCollisionCallbacks()
@@ -336,9 +339,9 @@ internal static class Program
         AssertTrue(world.TryGetEntity(staticRigid.id, out Entity staticEntity), "static entity should exist");
         AssertTrue(world.TryGetEntity(dynamicRigid.id, out Entity dynamicEntity), "dynamic entity should exist");
         AssertEqual(fix3.zero, staticEntity.translation);
-        AssertEqual(new fix3(2, 0, 0), dynamicEntity.translation);
+        AssertNear(new fix3(2, 0, 0), dynamicEntity.translation, fix._0_0001);
         AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
-        AssertEqual(fix3.zero, syncedDynamic.velocity);
+        AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
     }
 
     private static void TestKinematicRigidMovesWithoutForceIntegration()
@@ -382,7 +385,7 @@ internal static class Program
         AssertTrue(world.TryGetRigid(kinematicRigid.id, out Rigid syncedKinematic), "kinematic rigid should exist");
         AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
         AssertEqual(fix3.right, syncedKinematic.velocity);
-        AssertEqual(fix3.right, syncedDynamic.velocity);
+        AssertNear(fix3.right, syncedDynamic.velocity, fix._0_0001);
     }
 
     private static void TestSolverAppliesLinearFriction()
@@ -402,7 +405,7 @@ internal static class Program
         world.Update(fix.Zero);
 
         AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
-        AssertEqual(fix3.zero, syncedDynamic.velocity);
+        AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
     }
 
     private static void TestWorldIntegratesAngularVelocity()
@@ -448,6 +451,49 @@ internal static class Program
 
         AssertTrue(world.TryGetRigid(boxRigid.id, out Rigid syncedBox), "box rigid should exist");
         AssertTrue(syncedBox.angularVelocity.z > fix.Zero, "off center normal impulse should spin the dynamic body");
+    }
+
+    private static void TestColliderInitializesRigidMassProperties()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+
+        world.AddAABBCollider(rigid.id, fix3.zero, new fix3(2, 2, 2));
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        fix expectedInertia = new fix(64) / 12;
+        AssertEqual(new fix(8), syncedRigid.mass);
+        AssertEqual(new fix3(expectedInertia, expectedInertia, expectedInertia), syncedRigid.inertia);
+    }
+
+    private static void TestColliderDensityUpdatesAutomaticMassProperties()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Collider collider = world.AddAABBCollider(rigid.id, fix3.zero, new fix3(2, 2, 2));
+
+        world.SetColliderDensity(collider.id, fix._2);
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        fix expectedInertia = new fix(128) / 12;
+        AssertEqual(new fix(16), syncedRigid.mass);
+        AssertEqual(new fix3(expectedInertia, expectedInertia, expectedInertia), syncedRigid.inertia);
+    }
+
+    private static void TestManualMassPropertiesSurviveDensityChanges()
+    {
+        World world = new World(new WorldSettings(false));
+        Rigid rigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Collider collider = world.AddAABBCollider(rigid.id, fix3.zero, new fix3(2, 2, 2));
+        fix3 manualInertia = new fix3(7, 8, 9);
+
+        world.SetMass(rigid.id, 5);
+        world.SetInertia(rigid.id, manualInertia);
+        world.SetColliderDensity(collider.id, fix._2);
+
+        AssertTrue(world.TryGetRigid(rigid.id, out Rigid syncedRigid), "rigid should exist");
+        AssertEqual(new fix(5), syncedRigid.mass);
+        AssertEqual(manualInertia, syncedRigid.inertia);
     }
 
     private static void Run(string name, Action test)

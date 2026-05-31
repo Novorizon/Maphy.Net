@@ -72,6 +72,8 @@ namespace Maphy.Physics
                 type = RigidType.Dynamic,
                 mass = fix._1,
                 inertia = fix3.one,
+                autoMass = true,
+                autoInertia = true,
                 useGravity = settings.enableGravity,
             };
 
@@ -158,6 +160,7 @@ namespace Maphy.Physics
             }
 
             rigid.mass = mass;
+            rigid.autoMass = false;
             rigids[rigidId] = rigid;
             return true;
         }
@@ -219,6 +222,7 @@ namespace Maphy.Physics
             }
 
             rigid.inertia = inertia;
+            rigid.autoInertia = false;
             rigids[rigidId] = rigid;
             return true;
         }
@@ -255,6 +259,32 @@ namespace Maphy.Physics
             }
 
             collider.SetTrigger(isTrigger);
+            return true;
+        }
+
+        public bool SetColliderMaterial(ulong colliderId, Material material)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            collider.SetMaterial(material);
+            ApplyColliderMassProperties(collider);
+            return true;
+        }
+
+        public bool SetColliderDensity(ulong colliderId, fix density)
+        {
+            if (!colliders.TryGetValue(colliderId, out Collider collider))
+            {
+                return false;
+            }
+
+            Material material = collider.material;
+            material.SetDensity(density);
+            collider.SetMaterial(material);
+            ApplyColliderMassProperties(collider);
             return true;
         }
 
@@ -653,9 +683,37 @@ namespace Maphy.Physics
                     collider.SyncTransform(entity.translation, entity.orientation);
                     colliders[collider.id] = collider;
                 }
+
+                ApplyColliderMassProperties(collider);
             }
 
             return collider;
+        }
+
+        private void ApplyColliderMassProperties(Collider collider)
+        {
+            if (collider.shape == null || !rigids.TryGetValue(collider.rigidId, out Rigid rigid))
+            {
+                return;
+            }
+
+            if (!rigid.autoMass && !rigid.autoInertia)
+            {
+                return;
+            }
+
+            MassProperties massProperties = Physics.ComputeMassProperties(collider.shape, collider.material.GetDensity());
+            if (rigid.autoMass)
+            {
+                rigid.mass = massProperties.mass;
+            }
+
+            if (rigid.autoInertia)
+            {
+                rigid.inertia = massProperties.inertia;
+            }
+
+            rigids[rigid.id] = rigid;
         }
 
         private void SyncColliders()
