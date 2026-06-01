@@ -130,6 +130,20 @@ namespace Maphy.Physics
         public int TreeHeight => tree.Height;
         public int TreeMaxBalance => tree.MaxBalance;
 
+        public void Reserve(int colliderCapacity)
+        {
+            int pairCapacity = colliderCapacity > 1 ? colliderCapacity * 2 : colliderCapacity;
+            EnsureDictionaryCapacity(proxiesById, colliderCapacity);
+            EnsureHashSetCapacity(activeColliderIds, colliderCapacity);
+            EnsureHashSetCapacity(pairKeys, pairCapacity);
+            EnsureListCapacity(proxies, colliderCapacity);
+            EnsureListCapacity(broadCollisionPairs, pairCapacity);
+            EnsureListCapacity(staleColliderIds, colliderCapacity);
+            EnsureListCapacity(queryResults, colliderCapacity);
+            EnsureListCapacity(sortedPairKeys, pairCapacity);
+            tree.Reserve(colliderCapacity);
+        }
+
         public void Clear()
         {
             tree.Clear();
@@ -381,6 +395,34 @@ namespace Maphy.Physics
         private static bool ContainsCollider(BroadCollisionPairKey key, ulong colliderId)
         {
             return key.colliderId0 == colliderId || key.colliderId1 == colliderId;
+        }
+
+        private static void EnsureListCapacity<T>(List<T> list, int capacity)
+        {
+            if (capacity > list.Capacity)
+            {
+                list.Capacity = capacity;
+            }
+        }
+
+        private static void EnsureDictionaryCapacity<TKey, TValue>(Dictionary<TKey, TValue> dictionary, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                dictionary.EnsureCapacity(capacity);
+            }
+#endif
+        }
+
+        private static void EnsureHashSetCapacity<T>(HashSet<T> hashSet, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                hashSet.EnsureCapacity(capacity);
+            }
+#endif
         }
     }
 }

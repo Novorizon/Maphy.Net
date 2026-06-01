@@ -44,12 +44,27 @@ namespace Maphy.Physics
                 }
             }
 
-            if (movingShape.Type == ShapeType.AABB && targetShape.Type == ShapeType.AABB)
+            if (TryGetBoxCastData(movingShape, out BoxCastData movingBox)
+                && TryGetBoxCastData(targetShape, out BoxCastData targetBox))
             {
-                return TryAABBCast((AABB)movingShape, (AABB)targetShape, delta, out hit);
+                return TrySweepBoxBox(movingShape, targetShape, movingBox, targetBox, delta, out hit);
             }
 
-            return false;
+            return TryBoundsShapeCast(movingShape, targetShape, delta, out hit);
+        }
+
+        public static bool TryBoundsShapeCast(Shape movingShape, Shape targetShape, fix3 delta, out ShapeCastHit hit)
+        {
+            hit = default;
+            if (movingShape == null
+                || targetShape == null
+                || !IsShapeTypeImplemented(movingShape.Type)
+                || !IsShapeTypeImplemented(targetShape.Type))
+            {
+                return false;
+            }
+
+            return TryAABBCast(ComputeBounds(movingShape), ComputeBounds(targetShape), delta, out hit);
         }
 
         public static bool TryAABBCast(AABB movingBounds, AABB targetBounds, fix3 delta, out ShapeCastHit hit)
@@ -329,6 +344,198 @@ namespace Maphy.Physics
             return new Sphere(center, radius);
         }
 
+        private static bool TrySweepBoxBox(
+            Shape movingShape,
+            Shape targetShape,
+            BoxCastData movingBox,
+            BoxCastData targetBox,
+            fix3 delta,
+            out ShapeCastHit hit)
+        {
+            if (TryComputeContact(movingShape, targetShape, NarrowPhaseAlgorithm.SAT, out CollisionInfo collision))
+            {
+                fix3 normal = math.lengthsq(collision.normal) > math.Epsilon ? collision.normal : NormalizeCastOrDefault(targetBox.center - movingBox.center, fix3.right);
+                fix3 point = collision.hasContact ? collision[0].position : GetBoxSupport(movingBox, normal);
+                hit = new ShapeCastHit(fix.Zero, normal, point);
+                return true;
+            }
+
+            fix tEnter = fix.Zero;
+            fix tExit = fix.One;
+            fix3 normalEnter = fix3.zero;
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (!SweepBoxAxis(movingBox, targetBox, movingBox.GetAxis(i), delta, ref tEnter, ref tExit, ref normalEnter))
+                {
+                    hit = default;
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (!SweepBoxAxis(movingBox, targetBox, targetBox.GetAxis(i), delta, ref tEnter, ref tExit, ref normalEnter))
+                {
+                    hit = default;
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    fix3 axis = math.cross(movingBox.GetAxis(i), targetBox.GetAxis(j));
+                    if (!SweepBoxAxis(movingBox, targetBox, axis, delta, ref tEnter, ref tExit, ref normalEnter))
+                    {
+                        hit = default;
+                        return false;
+                    }
+                }
+            }
+
+            if (tEnter < fix.Zero || tEnter > fix.One || tEnter > tExit)
+            {
+                hit = default;
+                return false;
+            }
+
+            if (math.lengthsq(normalEnter) <= math.Epsilon)
+            {
+                normalEnter = NormalizeCastOrDefault(targetBox.center - movingBox.center, fix3.right);
+            }
+
+            BoxCastData impactBox = movingBox.Move(delta * tEnter);
+            fix3 point0 = GetBoxSupport(impactBox, normalEnter);
+            fix3 point1 = GetBoxSupport(targetBox, -normalEnter);
+            hit = new ShapeCastHit(tEnter, normalEnter, (point0 + point1) * fix._0_5);
+            return true;
+        }
+
+        private static bool SweepBoxAxis(
+            BoxCastData movingBox,
+            BoxCastData targetBox,
+            fix3 axis,
+            fix3 delta,
+            ref fix tEnter,
+            ref fix tExit,
+            ref fix3 normalEnter)
+        {
+            fix lengthSq = math.lengthsq(axis);
+            if (lengthSq <= fix._0_0001)
+            {
+                return true;
+            }
+
+            axis /= math.sqrt(lengthSq);
+            fix movingRadius = movingBox.ProjectRadius(axis);
+            fix targetRadius = targetBox.ProjectRadius(axis);
+            fix movingCenter = math.dot(movingBox.center, axis);
+            fix targetCenter = math.dot(targetBox.center, axis);
+            fix velocity = math.dot(delta, axis);
+            fix movingMin = movingCenter - movingRadius;
+            fix movingMax = movingCenter + movingRadius;
+            fix targetMin = targetCenter - targetRadius;
+            fix targetMax = targetCenter + targetRadius;
+
+            return SweepInterval(movingMin, movingMax, targetMin, targetMax, velocity, axis, ref tEnter, ref tExit, ref normalEnter);
+        }
+
+        private static bool SweepInterval(
+            fix movingMin,
+            fix movingMax,
+            fix targetMin,
+            fix targetMax,
+            fix velocity,
+            fix3 axis,
+            ref fix tEnter,
+            ref fix tExit,
+            ref fix3 normalEnter)
+        {
+            fix axisEnter = fix.Zero;
+            fix axisExit = fix.One;
+            fix3 axisNormal = fix3.zero;
+
+            if (movingMax < targetMin)
+            {
+                if (velocity <= math.Epsilon)
+                {
+                    return false;
+                }
+
+                axisEnter = (targetMin - movingMax) / velocity;
+                axisExit = (targetMax - movingMin) / velocity;
+                axisNormal = axis;
+            }
+            else if (targetMax < movingMin)
+            {
+                if (velocity >= -math.Epsilon)
+                {
+                    return false;
+                }
+
+                axisEnter = (targetMax - movingMin) / velocity;
+                axisExit = (targetMin - movingMax) / velocity;
+                axisNormal = -axis;
+            }
+            else
+            {
+                if (velocity > math.Epsilon)
+                {
+                    axisExit = (targetMax - movingMin) / velocity;
+                }
+                else if (velocity < -math.Epsilon)
+                {
+                    axisExit = (targetMin - movingMax) / velocity;
+                }
+            }
+
+            if (axisEnter > tEnter)
+            {
+                tEnter = axisEnter;
+                normalEnter = axisNormal;
+            }
+
+            if (axisExit < tExit)
+            {
+                tExit = axisExit;
+            }
+
+            return tEnter <= tExit && tExit >= fix.Zero && tEnter <= fix.One;
+        }
+
+        private static bool TryGetBoxCastData(Shape shape, out BoxCastData box)
+        {
+            switch (shape.Type)
+            {
+                case ShapeType.AABB:
+                    AABB aabb = (AABB)shape;
+                    box = new BoxCastData(aabb.center, aabb.extents, fix3.right, fix3.up, fix3.forward);
+                    return true;
+                case ShapeType.OBB:
+                    OBB obb = (OBB)shape;
+                    box = new BoxCastData(
+                        obb.center,
+                        obb.extents,
+                        obb.orientation * fix3.right,
+                        obb.orientation * fix3.up,
+                        obb.orientation * fix3.forward);
+                    return true;
+                default:
+                    box = default;
+                    return false;
+            }
+        }
+
+        private static fix3 GetBoxSupport(BoxCastData box, fix3 direction)
+        {
+            return box.center
+                + box.axis0 * (math.dot(box.axis0, direction) >= fix.Zero ? box.extents.x : -box.extents.x)
+                + box.axis1 * (math.dot(box.axis1, direction) >= fix.Zero ? box.extents.y : -box.extents.y)
+                + box.axis2 * (math.dot(box.axis2, direction) >= fix.Zero ? box.extents.z : -box.extents.z);
+        }
+
         private static bool TrySweepPointAABB(fix3 point, AABB targetBounds, fix3 delta, out fix fraction, out fix3 normal)
         {
             if (IsOverlap(targetBounds, point))
@@ -428,6 +635,49 @@ namespace Maphy.Physics
         {
             fix lengthSq = math.lengthsq(value);
             return lengthSq > math.Epsilon ? value / math.sqrt(lengthSq) : fallback;
+        }
+
+        private readonly struct BoxCastData
+        {
+            public readonly fix3 center;
+            public readonly fix3 extents;
+            public readonly fix3 axis0;
+            public readonly fix3 axis1;
+            public readonly fix3 axis2;
+
+            public BoxCastData(fix3 center, fix3 extents, fix3 axis0, fix3 axis1, fix3 axis2)
+            {
+                this.center = center;
+                this.extents = extents;
+                this.axis0 = axis0;
+                this.axis1 = axis1;
+                this.axis2 = axis2;
+            }
+
+            public BoxCastData Move(fix3 translation)
+            {
+                return new BoxCastData(center + translation, extents, axis0, axis1, axis2);
+            }
+
+            public fix3 GetAxis(int index)
+            {
+                switch (index)
+                {
+                    case 0:
+                        return axis0;
+                    case 1:
+                        return axis1;
+                    default:
+                        return axis2;
+                }
+            }
+
+            public fix ProjectRadius(fix3 axis)
+            {
+                return extents.x * math.abs(math.dot(axis0, axis))
+                    + extents.y * math.abs(math.dot(axis1, axis))
+                    + extents.z * math.abs(math.dot(axis2, axis));
+            }
         }
     }
 }

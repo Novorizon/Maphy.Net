@@ -213,26 +213,7 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix sqrt(fix a)
         {
-            if (a.value < 0)
-                return fix.NaN;
-
-            if (a.value == 0)
-                return fix.Zero;
-
-            fix x = a > fix.One ? a : fix.One;
-            long scaled = a.value << fix.PRECISION;
-
-            while (true)
-            {
-                long current = x.value;
-                long next = (current + scaled / current) >> 1;
-                if (next >= current)
-                {
-                    return x;
-                }
-
-                x.value = next;
-            }
+            return fixWide.Sqrt(a);
         }
 
         //[MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -11,6 +11,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.mathematics",
+            "expression": "1.0.0",
+            "define": "MAPHY_UNITY_MATHEMATICS"
+        }
+    ],
     "noEngineReferences": false
 }

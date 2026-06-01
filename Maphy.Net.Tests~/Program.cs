@@ -12,6 +12,7 @@ internal static class Program
     {
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
+        Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);
         Run("fix3x3 mul is matrix multiplication", TestFix3x3MatrixMul);
         Run("fix4x4 mul preserves TRS with identity", TestFix4x4MatrixMul);
         Run("capsule capsule overlap uses segment distance", TestCapsuleCapsuleOverlap);
@@ -22,6 +23,35 @@ internal static class Program
         Run("dynamic AABB tree query updates moved proxy", TestDynamicAABBTreeUpdatesMovedProxy);
         Run("dynamic AABB tree keeps height bounded", TestDynamicAABBTreeKeepsHeightBounded);
         Run("world update syncs collider transform", TestWorldTransformSync);
+        Run("physics world core integrates like object world", TestPhysicsWorldCoreIntegratesLikeObjectWorld);
+        Run("physics world core builds contact manifolds", TestPhysicsWorldCoreBuildsContactManifolds);
+        Run("physics world core resolves contact velocity", TestPhysicsWorldCoreResolvesContactVelocity);
+        Run("physics world core corrects contact positions", TestPhysicsWorldCoreCorrectsContactPositions);
+        Run("physics world core broadphase tree updates moving pairs", TestPhysicsWorldCoreBroadphaseTreeUpdatesMovingPairs);
+        Run("physics world core broadphase tree keeps height bounded", TestPhysicsWorldCoreBroadphaseTreeKeepsHeightBounded);
+        Run("physics world core raycast non alloc returns sorted hits", TestPhysicsWorldCoreRaycastNonAllocReturnsSortedHits);
+        Run("physics world core shape cast non alloc reports sorted hits", TestPhysicsWorldCoreShapeCastNonAllocReportsSortedHits);
+        Run("physics world core query and broadphase do not allocate", TestPhysicsWorldCoreQueryAndBroadphaseDoNotAllocate);
+        Run("physics world core large broadphase query does not allocate", TestPhysicsWorldCoreLargeBroadphaseQueryDoesNotAllocate);
+        Run("physics world core removes stale persistent broadphase proxies", TestPhysicsWorldCoreRemovesStalePersistentBroadphaseProxies);
+        Run("physics world core replay hash is deterministic", TestPhysicsWorldCoreReplayHashIsDeterministic);
+        Run("physics world core compound mass aggregates colliders", TestPhysicsWorldCoreCompoundMassAggregatesColliders);
+        Run("physics world core builds islands and sleeps", TestPhysicsWorldCoreBuildsIslandsAndSleeps);
+        Run("physics world core CCD stops fast body", TestPhysicsWorldCoreCCDStopsFastBody);
+        Run("physics world core dynamic CCD handles dynamic target", TestPhysicsWorldCoreDynamicCCDHandlesDynamicTarget);
+        Run("physics world core material affects solver", TestPhysicsWorldCoreMaterialAffectsSolver);
+        Run("physics world core CCD and sleep do not allocate", TestPhysicsWorldCoreCCDAndSleepDoNotAllocate);
+        Run("physics world core exposes step stats and island ids", TestPhysicsWorldCoreExposesStepStatsAndIslandIds);
+        Run("physics world core exposes capacity and memory budget", TestPhysicsWorldCoreExposesCapacityAndMemoryBudget);
+        Run("physics world core reports capacity overflow in stats", TestPhysicsWorldCoreReportsCapacityOverflowInStats);
+        Run("physics world core reports performance counters", TestPhysicsWorldCoreReportsPerformanceCounters);
+        Run("physics world core dirty sync updates changed colliders only", TestPhysicsWorldCoreDirtySyncUpdatesChangedCollidersOnly);
+        Run("physics world core auto mass can be re-enabled", TestPhysicsWorldCoreAutoMassCanBeReenabled);
+        Run("physics world core long replay with lifecycle is deterministic", TestPhysicsWorldCoreLongReplayWithLifecycleIsDeterministic);
+        Run("physics world core clamps unsafe motion values", TestPhysicsWorldCoreClampsUnsafeMotionValues);
+        Run("physics world core stacked boxes stay separated", TestPhysicsWorldCoreStackedBoxesStaySeparated);
+        Run("physics world core CCD sweeps capsule and compound colliders", TestPhysicsWorldCoreCCDSweepsCapsuleAndCompoundColliders);
+        Run("physics world core contact lifetime persists", TestPhysicsWorldCoreContactLifetimePersists);
         Run("broadphase tree updates moving pairs", TestBroadphaseTreeUpdatesMovingPairs);
         Run("broadphase removes stale tree proxies", TestBroadphaseRemovesStaleTreeProxies);
         Run("world AABB query uses broadphase tree", TestWorldAABBQueryUsesBroadphaseTree);
@@ -37,6 +67,7 @@ internal static class Program
         Run("SAT narrow phase can be selected", TestSATNarrowPhaseCanBeSelected);
         Run("GJK narrow phase can be selected", TestGJKNarrowPhaseCanBeSelected);
         Run("GJK EPA handles rotated box boundary", TestGJKEPAHandlesRotatedBoxBoundary);
+        Run("GJK EPA warm path does not allocate", TestGJKEPAWarmPathDoesNotAllocate);
         Run("capsule OBB contact uses segment box distance", TestCapsuleOBBContactUsesSegmentBoxDistance);
         Run("world integrates linear velocity", TestWorldIntegratesLinearVelocity);
         Run("world fixed step accumulator advances deterministically", TestWorldFixedStepAccumulatorAdvancesDeterministically);
@@ -67,6 +98,7 @@ internal static class Program
         Run("kinematic rigid moves without force integration", TestKinematicRigidMovesWithoutForceIntegration);
         Run("kinematic body pushes dynamic body", TestKinematicBodyPushesDynamicBody);
         Run("solver applies linear friction", TestSolverAppliesLinearFriction);
+        Run("solver applies two axis friction", TestSolverAppliesTwoAxisFriction);
         Run("restitution threshold suppresses low speed bounce", TestRestitutionThresholdSuppressesLowSpeedBounce);
         Run("material bounciness affects restitution", TestMaterialBouncinessAffectsRestitution);
         Run("material friction affects solver", TestMaterialFrictionAffectsSolver);
@@ -75,15 +107,20 @@ internal static class Program
         Run("shape and constraint frameworks expose capabilities", TestShapeAndConstraintFrameworksExposeCapabilities);
         Run("physics shape cast reports time of impact", TestPhysicsShapeCastReportsTimeOfImpact);
         Run("physics shape cast sweeps capsule targets", TestPhysicsShapeCastSweepsCapsuleTargets);
+        Run("physics shape cast sweeps OBB with SAT", TestPhysicsShapeCastSweepsOBBWithSAT);
         Run("world clamps unsafe motion values", TestWorldClampsUnsafeMotionValues);
+        Run("capsule zero axis stays numerically safe", TestCapsuleZeroAxisStaysNumericallySafe);
         Run("solver clamps contact impulses", TestSolverClampsContactImpulses);
+        Run("solver contact velocity bias separates penetration", TestSolverContactVelocityBiasSeparatesPenetration);
         Run("contact manifold settings control persistence", TestContactManifoldSettingsControlPersistence);
         Run("world reports step stats after update", TestWorldReportsStepStatsAfterUpdate);
         Run("world warm update allocation baseline stays low", TestWorldWarmUpdateAllocationBaselineStaysLow);
         Run("collision callback lifecycle changes are deferred safely", TestCollisionCallbackLifecycleChangesAreDeferredSafely);
+        Run("collision callback can create bodies safely", TestCollisionCallbackCanCreateBodiesSafely);
         Run("collision callback exceptions can be captured", TestCollisionCallbackExceptionsCanBeCaptured);
         Run("CCD stops fast body before static collider", TestCCDStopsFastBodyBeforeStaticCollider);
         Run("CCD sweeps capsule against static collider", TestCCDSweepsCapsuleAgainstStaticCollider);
+        Run("CCD uses earliest compound collider hit", TestCCDUsesEarliestCompoundColliderHit);
         Run("CCD sweeps sphere against sphere", TestCCDSweepsSphereAgainstSphere);
         Run("CCD sweeps dynamic sphere against dynamic sphere", TestCCDSweepsDynamicSphereAgainstDynamicSphere);
         Run("off center contact applies angular impulse", TestOffCenterContactAppliesAngularImpulse);
@@ -107,6 +144,16 @@ internal static class Program
     {
         AssertEqual(fix._0_5, math.sqrt(fix._0_25));
         AssertEqual(new fix(2), math.sqrt(new fix(4)));
+    }
+
+    private static void TestFixArithmeticReportsOverflowSafely()
+    {
+        fix large = fix.Raw(long.MaxValue / 2);
+
+        AssertEqual(fix.NaN, fix.Max + fix.One);
+        AssertEqual(fix.NaN, large * new fix(3));
+        AssertEqual(fix.NaN, large / fix._0_0001);
+        AssertFalse(fix.IsNaN(math.sqrt(fix.Max)), "sqrt should not overflow its fixed-point scaling path");
     }
 
     private static void TestFix3x3MatrixMul()
@@ -241,6 +288,949 @@ internal static class Program
         AssertTrue(world.TryGetCollider(collider.id, out Collider synced), "collider should remain registered");
         Sphere sphere = (Sphere)synced.shape;
         AssertEqual(new fix3(11, 0, 0), sphere.Center);
+    }
+
+    private static void TestPhysicsWorldCoreIntegratesLikeObjectWorld()
+    {
+        World objectWorld = new World(new WorldSettings(false));
+        Rigid objectRigid = objectWorld.CreateRigid(fix3.zero, quaternion.identity);
+        Collider objectCollider = objectWorld.AddSphereCollider(objectRigid.id, fix3.right, fix.One);
+        objectWorld.SetVelocity(objectRigid.id, new fix3(2, 0, 0));
+
+        PhysicsWorld coreWorld = new PhysicsWorld(new PhysicsWorldSettings(false));
+        coreWorld.Reserve(1, 1, 1);
+        AssertTrue(coreWorld.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "core body should be created");
+        AssertTrue(coreWorld.AddSphere(body, fix3.right, fix.One, out ColliderHandle collider), "core collider should be created");
+        AssertTrue(coreWorld.SetBodyVelocity(body, new fix3(2, 0, 0)), "core velocity should be set");
+
+        objectWorld.Update(fix._0_5);
+        coreWorld.Update(fix._0_5);
+
+        AssertTrue(objectWorld.TryGetEntity(objectRigid.id, out Entity objectEntity), "object world entity should exist");
+        AssertTrue(objectWorld.TryGetCollider(objectCollider.id, out Collider syncedObjectCollider), "object world collider should exist");
+        AssertTrue(coreWorld.TryGetBody(body, out PhysicsWorldBody coreBody), "core body should exist");
+        AssertTrue(coreWorld.TryGetCollider(collider, out PhysicsWorldCollider coreCollider), "core collider should exist");
+
+        Sphere objectSphere = (Sphere)syncedObjectCollider.shape;
+        AssertEqual(objectEntity.translation, coreBody.position);
+        AssertEqual(objectSphere.Center, coreCollider.worldShape.sphere.Center);
+    }
+
+    private static void TestPhysicsWorldCoreBuildsContactManifolds()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddAABB(body0, fix3.zero, new fix3(2, 2, 2), out ColliderHandle collider0), "first AABB should be created");
+        AssertTrue(world.AddAABB(body1, fix3.zero, new fix3(2, 2, 2), out ColliderHandle collider1), "second AABB should be created");
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, world.PairCount);
+        AssertEqual(1, world.ContactManifoldCount);
+        AssertFalse(world.ContactOverflowed, "core contact manifold buffer should not overflow");
+        AssertTrue(world.TryGetContactManifold(0, out PhysicsWorldManifold manifold), "core contact manifold should be readable");
+        AssertTrue(manifold.collider0 == collider0 && manifold.collider1 == collider1, "manifold should keep stable collider handles");
+        AssertEqual(fix3.right, manifold.normal);
+        AssertEqual(4, manifold.contactCount);
+        AssertEqual(fix._0_5, manifold[0].penetrationDepth);
+
+        AssertTrue(world.SetColliderEnabled(collider1, false), "disabling collider should succeed");
+        AssertEqual(0, world.ContactManifoldCount);
+        world.Update(fix.Zero);
+
+        AssertEqual(0, world.PairCount);
+        AssertEqual(0, world.ContactManifoldCount);
+    }
+
+    private static void TestPhysicsWorldCoreResolvesContactVelocity()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.friction = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle dynamicBody), "dynamic body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Static, out BodyHandle staticBody), "static body should be created");
+        AssertTrue(world.AddSphere(dynamicBody, fix3.zero, fix.One, out ColliderHandle _), "dynamic sphere should be created");
+        AssertTrue(world.AddSphere(staticBody, fix3.zero, fix.One, out ColliderHandle _), "static sphere should be created");
+        AssertTrue(world.SetBodyVelocity(dynamicBody, fix3.right), "dynamic body velocity should be set");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetBody(dynamicBody, out PhysicsWorldBody body), "dynamic body should still exist");
+        AssertNear(fix3.zero, body.velocity, fix._0_0001);
+        AssertEqual(1, world.ContactManifoldCount);
+        AssertTrue(world.TryGetContactManifold(0, out PhysicsWorldManifold manifold), "contact manifold should be readable");
+        AssertTrue(manifold[0].normalImpulse > fix.Zero, "normal impulse should be accumulated for warm start");
+    }
+
+    private static void TestPhysicsWorldCoreCorrectsContactPositions()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.penetrationSlop = fix.Zero;
+        settings.positionCorrectionPercent = fix.One;
+        settings.friction = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle dynamicBody), "dynamic body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Static, out BodyHandle staticBody), "static body should be created");
+        AssertTrue(world.AddSphere(dynamicBody, fix3.zero, fix.One, out ColliderHandle _), "dynamic sphere should be created");
+        AssertTrue(world.AddSphere(staticBody, fix3.zero, fix.One, out ColliderHandle _), "static sphere should be created");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetBody(dynamicBody, out PhysicsWorldBody body), "dynamic body should still exist");
+        AssertNear(new fix3(-fix._0_5, fix.Zero, fix.Zero), body.position, fix._0_0001);
+    }
+
+    private static void TestPhysicsWorldCoreBroadphaseTreeUpdatesMovingPairs()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(4, 4, 8, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Static, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle collider0), "first collider should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle collider1), "second collider should be created");
+        AssertTrue(world.SetColliderTrigger(collider0, true), "first collider should be trigger");
+        AssertTrue(world.SetColliderTrigger(collider1, true), "second collider should be trigger");
+
+        world.Update(fix.Zero);
+
+        AssertEqual(2, world.BroadphaseTreeProxyCount);
+        AssertTrue(world.BroadphaseTreeHeight > 0, "core broadphase tree should be populated");
+        AssertEqual(0, world.PairCount);
+
+        AssertTrue(world.SetBodyTransform(body1, new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity), "moving body should update transform");
+        world.Update(fix.Zero);
+
+        AssertEqual(2, world.BroadphaseTreeProxyCount);
+        AssertEqual(1, world.PairCount);
+        AssertTrue(world.TryGetPair(0, out PhysicsWorldPair pair), "moving pair should be generated");
+        AssertTrue(pair.collider0 == collider0 && pair.collider1 == collider1, "core pair order should stay stable after tree query");
+
+        AssertTrue(world.SetBodyTransform(body1, new fix3(5, 0, 0), quaternion.identity), "moving body should update transform again");
+        world.Update(fix.Zero);
+
+        AssertEqual(2, world.BroadphaseTreeProxyCount);
+        AssertEqual(0, world.PairCount);
+        AssertEqual(0, world.ContactManifoldCount);
+    }
+
+    private static void TestPhysicsWorldCoreBroadphaseTreeKeepsHeightBounded()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(32, 32, 64, 64);
+
+        for (int i = 0; i < 32; i++)
+        {
+            AssertTrue(world.CreateBody(new fix3(i * 3, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body), "body should be created");
+            AssertTrue(world.AddSphere(body, fix3.zero, fix._0_5, out ColliderHandle _), "collider should be created");
+        }
+
+        world.Update(fix.Zero);
+
+        AssertEqual(32, world.BroadphaseTreeProxyCount);
+        AssertTrue(world.BroadphaseTreeHeight <= 8, "core broadphase tree height should stay bounded for ordered inserts");
+        AssertTrue(world.BroadphaseTreeMaxBalance <= 1, "core broadphase tree should stay locally balanced");
+        AssertFalse(world.BroadphaseTreeOverflowed, "core broadphase tree should fit in reserved capacity");
+    }
+
+    private static void TestPhysicsWorldCoreRaycastNonAllocReturnsSortedHits()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(3, 3, 8, 8);
+        AssertTrue(world.CreateBody(new fix3(3, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.CreateBody(new fix3(0, 3, 0), quaternion.identity, RigidType.Static, out BodyHandle body2), "third body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle collider0), "first sphere should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle collider1), "second sphere should be created");
+        AssertTrue(world.AddSphere(body2, fix3.zero, fix.One, out ColliderHandle collider2), "third sphere should be created");
+        AssertTrue(world.SetColliderLayer(collider1, 2), "second collider layer should be set");
+        PhysicsWorldRaycastHit[] hits = new PhysicsWorldRaycastHit[2];
+
+        world.Update(fix.Zero);
+
+        int count = world.RaycastNonAlloc(new Ray(fix3.zero, fix3.right), new fix(10), hits);
+        AssertEqual(2, count);
+        AssertFalse(world.RaycastOverflowed, "raycast result buffer should not overflow");
+        AssertTrue(hits[0].collider == collider0, "nearest raycast hit should be first");
+        AssertTrue(hits[1].collider == collider1, "farther raycast hit should be second");
+        AssertEqual(new fix(2), hits[0].distance);
+        AssertEqual(new fix(5), hits[1].distance);
+        AssertTrue(hits[0].body == body0, "raycast hit should carry the body handle");
+
+        count = world.RaycastNonAlloc(new Ray(fix3.zero, fix3.right), new fix(10), Collider.GetLayerBit(2), hits);
+        AssertEqual(1, count);
+        AssertTrue(hits[0].collider == collider1, "layer-filtered raycast should return only layer 2");
+
+        count = world.RaycastNonAlloc(new Ray(fix3.zero, fix3.up), new fix(10), hits);
+        AssertEqual(1, count);
+        AssertTrue(hits[0].collider == collider2, "vertical raycast should hit the third collider");
+    }
+
+    private static void TestPhysicsWorldCoreShapeCastNonAllocReportsSortedHits()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(3, 3, 8, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Static, out BodyHandle movingBody), "moving body should be created");
+        AssertTrue(world.CreateBody(new fix3(3, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle targetBody0), "first target should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle targetBody1), "second target should be created");
+        AssertTrue(world.AddSphere(movingBody, fix3.zero, fix._0_5, out ColliderHandle movingCollider), "moving sphere should be created");
+        AssertTrue(world.AddAABB(targetBody0, fix3.zero, new fix3(1, 1, 1), out ColliderHandle target0), "first target AABB should be created");
+        AssertTrue(world.AddAABB(targetBody1, fix3.zero, new fix3(1, 1, 1), out ColliderHandle target1), "second target AABB should be created");
+        PhysicsWorldShapeCastHit[] hits = new PhysicsWorldShapeCastHit[2];
+
+        world.Update(fix.Zero);
+
+        int count = world.ShapeCastNonAlloc(movingCollider, new fix3(8, 0, 0), hits);
+        AssertEqual(2, count);
+        AssertFalse(world.ShapeCastOverflowed, "shape cast result buffer should not overflow");
+        AssertTrue(hits[0].collider == target0, "first shape cast hit should be nearest");
+        AssertTrue(hits[1].collider == target1, "second shape cast hit should be farther");
+        AssertEqual(fix._0_25, hits[0].fraction);
+        AssertEqual(new fix(5) / 8, hits[1].fraction);
+        AssertTrue(hits[0].body == targetBody0, "shape cast hit should carry the body handle");
+    }
+
+    private static void TestPhysicsWorldCoreQueryAndBroadphaseDoNotAllocate()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(4, 4, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle collider0), "first collider should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle collider1), "second collider should be created");
+        ColliderHandle[] results = new ColliderHandle[4];
+        PhysicsWorldRaycastHit[] rayResults = new PhysicsWorldRaycastHit[4];
+        PhysicsWorldShapeCastHit[] shapeCastResults = new PhysicsWorldShapeCastHit[4];
+        AABB queryBounds = new AABB(fix3.zero, new fix3(4, 4, 4));
+        Ray ray = new Ray(new fix3(-5, 0, 0), fix3.right);
+        PhysicsShapeData movingShape = PhysicsShapeData.Sphere(new fix3(-4, 0, 0), fix._0_5);
+
+        for (int i = 0; i < 8; i++)
+        {
+            world.Update(fix.Zero);
+            AssertEqual(2, world.QueryAABBNonAlloc(queryBounds, results));
+            AssertEqual(2, world.RaycastNonAlloc(ray, new fix(10), rayResults));
+            AssertEqual(2, world.ShapeCastNonAlloc(movingShape, new fix3(8, 0, 0), shapeCastResults));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 16; i++)
+        {
+            world.Update(fix.Zero);
+            AssertEqual(1, world.PairCount);
+            AssertEqual(1, world.ContactManifoldCount);
+            AssertEqual(2, world.QueryAABBNonAlloc(queryBounds, results));
+            AssertEqual(2, world.RaycastNonAlloc(ray, new fix(10), rayResults));
+            AssertEqual(2, world.ShapeCastNonAlloc(movingShape, new fix3(8, 0, 0), shapeCastResults));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        AssertTrue(allocated == 0, $"core warm update/query allocated {allocated} bytes");
+        AssertFalse(world.PairOverflowed, "core broadphase pair buffer should not overflow");
+        AssertFalse(world.ContactOverflowed, "core contact manifold buffer should not overflow");
+        AssertFalse(world.QueryOverflowed, "core query buffer should not overflow");
+        AssertFalse(world.RaycastOverflowed, "core raycast buffer should not overflow");
+        AssertFalse(world.ShapeCastOverflowed, "core shape cast buffer should not overflow");
+        AssertTrue(world.TryGetPair(0, out PhysicsWorldPair pair), "core broadphase pair should be readable");
+        AssertTrue(world.TryGetContactManifold(0, out PhysicsWorldManifold manifold), "core contact manifold should be readable");
+        AssertTrue(pair.collider0 == collider0 && pair.collider1 == collider1, "core broadphase pair should be stable by creation order");
+        AssertTrue(manifold[0].lifetime > 1, "core contact manifold should preserve point lifetime across frames");
+        AssertTrue(results[0] == collider0 && results[1] == collider1, "query results should be stable by storage order");
+        AssertTrue(rayResults[0].collider == collider0 && rayResults[1].collider == collider1, "raycast results should be stable by distance");
+        AssertTrue(shapeCastResults[0].collider == collider0 && shapeCastResults[1].collider == collider1, "shape cast results should be stable by fraction");
+    }
+
+    private static void TestPhysicsWorldCoreLargeBroadphaseQueryDoesNotAllocate()
+    {
+        const int Count = 64;
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(PhysicsWorldCapacity.ForBodies(Count, 1, 2));
+        for (int i = 0; i < Count; i++)
+        {
+            int x = i % 8;
+            int z = i / 8;
+            AssertTrue(world.CreateBody(new fix3(x * 4, 0, z * 4), quaternion.identity, RigidType.Static, out BodyHandle body), "body should be created");
+            AssertTrue(world.AddAABB(body, fix3.zero, new fix3(1, 1, 1), out ColliderHandle _), "collider should be created");
+        }
+
+        ColliderHandle[] results = new ColliderHandle[Count];
+        AABB queryBounds = new AABB(new fix3(14, 0, 14), new fix3(40, 4, 40));
+        for (int i = 0; i < 4; i++)
+        {
+            world.Update(fix.Zero);
+            AssertEqual(Count, world.QueryAABBNonAlloc(queryBounds, results));
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 16; i++)
+        {
+            world.Update(fix.Zero);
+            AssertEqual(Count, world.QueryAABBNonAlloc(queryBounds, results));
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        AssertTrue(allocated == 0, $"core large broadphase/query warm path allocated {allocated} bytes");
+        AssertFalse(world.QueryOverflowed, "large query result buffer should fit");
+        AssertFalse(world.BroadphaseTreeOverflowed, "large broadphase tree should fit reserved capacity");
+        AssertTrue(world.BroadphaseTreeHeight <= 12, "large broadphase tree height should stay bounded");
+        AssertTrue(world.LastStepStats.broadphaseCandidateCount >= Count, "broadphase should report visited candidates");
+        AssertTrue(world.LastStepStats.broadphaseFilteredCandidateCount >= Count, "broadphase should report filtered candidates");
+        AssertEqual(0, world.LastStepStats.narrowPhaseTestCount);
+    }
+
+    private static void TestPhysicsWorldCoreRemovesStalePersistentBroadphaseProxies()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(3, 3, 8, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Static, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(3, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle body2), "third body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle collider0), "first collider should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle collider1), "second collider should be created");
+        AssertTrue(world.AddSphere(body2, fix3.zero, fix.One, out ColliderHandle collider2), "third collider should be created");
+        ColliderHandle[] results = new ColliderHandle[4];
+
+        world.Update(fix.Zero);
+
+        AssertEqual(3, world.BroadphaseTreeProxyCount);
+        AssertEqual(3, world.QueryAABBNonAlloc(new AABB(new fix3(3, 0, 0), new fix3(10, 2, 2)), results));
+
+        AssertTrue(world.SetColliderEnabled(collider1, false), "disabling collider should remove its proxy");
+        AssertEqual(2, world.QueryAABBNonAlloc(new AABB(new fix3(3, 0, 0), new fix3(10, 2, 2)), results));
+        AssertEqual(2, world.BroadphaseTreeProxyCount);
+        AssertTrue(results[0] == collider0 && results[1] == collider2, "query should skip the disabled collider");
+
+        AssertTrue(world.DestroyCollider(collider2), "destroying collider should remove its proxy");
+        AssertEqual(1, world.QueryAABBNonAlloc(new AABB(new fix3(3, 0, 0), new fix3(10, 2, 2)), results));
+        AssertEqual(1, world.BroadphaseTreeProxyCount);
+        AssertTrue(results[0] == collider0, "query should skip the destroyed collider");
+    }
+
+    private static void TestPhysicsWorldCoreReplayHashIsDeterministic()
+    {
+        PhysicsWorld first = CreateCoreReplayWorld();
+        PhysicsWorld second = CreateCoreReplayWorld();
+
+        ulong firstHash = 0;
+        ulong secondHash = 0;
+        for (int i = 0; i < 64; i++)
+        {
+            firstHash = first.StepAndComputeStateHash(fix.One / 60);
+            secondHash = second.StepAndComputeStateHash(fix.One / 60);
+            AssertEqual(firstHash, secondHash);
+        }
+
+        AssertEqual(firstHash, first.ComputeStateHash());
+        AssertEqual(secondHash, second.ComputeStateHash());
+    }
+
+    private static PhysicsWorld CreateCoreReplayWorld()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.solverIterations = 2;
+        settings.positionIterations = 2;
+        settings.enableSleeping = true;
+        settings.sleepTime = new fix(2);
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(4, 5, 16, 16);
+        AssertTrue(world.CreateBody(new fix3(-4, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle moving), "moving body should be created");
+        AssertTrue(world.CreateBody(new fix3(0, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle wall), "static body should be created");
+        AssertTrue(world.CreateBody(new fix3(3, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle sleeper), "sleep candidate should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Kinematic, out BodyHandle kinematic), "kinematic body should be created");
+        AssertTrue(world.AddSphere(moving, fix3.zero, fix._0_5, out ColliderHandle _), "moving sphere should be created");
+        AssertTrue(world.AddAABB(wall, fix3.zero, new fix3(1, 4, 4), out ColliderHandle _), "wall collider should be created");
+        AssertTrue(world.AddSphere(sleeper, fix3.zero, fix._0_5, out ColliderHandle _), "sleep sphere should be created");
+        AssertTrue(world.AddSphere(kinematic, fix3.zero, fix._0_5, out ColliderHandle _), "kinematic sphere should be created");
+        AssertTrue(world.SetBodyVelocity(moving, new fix3(8, 0, 0)), "moving velocity should be set");
+        AssertTrue(world.SetBodyVelocity(kinematic, new fix3(-fix._0_5, fix.Zero, fix.Zero)), "kinematic velocity should be set");
+        return world;
+    }
+
+    private static void TestPhysicsWorldCoreCompoundMassAggregatesColliders()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(1, 2, 2, 2);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "body should be created");
+        AssertTrue(world.AddAABB(body, fix3.zero, new fix3(2, 2, 2), out ColliderHandle collider0), "first box should be created");
+        AssertTrue(world.AddAABB(body, new fix3(2, 0, 0), new fix3(2, 2, 2), out ColliderHandle collider1), "second box should be created");
+
+        AssertTrue(world.TryGetBody(body, out PhysicsWorldBody massBody), "body should be readable");
+        AssertEqual(new fix(16), massBody.mass);
+        AssertTrue(massBody.inertia.y > massBody.inertia.x, "off-center collider should add parallel-axis inertia");
+
+        AssertTrue(world.SetColliderDensity(collider1, new fix(2)), "density update should succeed");
+        AssertTrue(world.TryGetBody(body, out massBody), "body should still be readable");
+        AssertEqual(new fix(24), massBody.mass);
+
+        AssertTrue(world.SetBodyMass(body, new fix(5)), "manual mass should disable auto mass");
+        AssertTrue(world.SetColliderDensity(collider0, new fix(4)), "density update should not override manual mass");
+        AssertTrue(world.TryGetBody(body, out massBody), "manual mass body should be readable");
+        AssertEqual(new fix(5), massBody.mass);
+    }
+
+    private static void TestPhysicsWorldCoreBuildsIslandsAndSleeps()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.sleepTime = fix.Zero;
+        settings.linearSleepThreshold = fix._0_01;
+        settings.angularSleepThreshold = fix._0_01;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(3, 3, 8, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle body2), "third body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle _), "first sphere should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle _), "second sphere should be created");
+        AssertTrue(world.AddSphere(body2, fix3.zero, fix.One, out ColliderHandle _), "third sphere should be created");
+
+        world.Update(fix.One / 60);
+
+        AssertEqual(2, world.IslandCount);
+        AssertEqual(2, world.SleepingIslandCount);
+        AssertTrue(world.TryGetBody(body0, out PhysicsWorldBody sleeping0), "first body should be readable");
+        AssertTrue(world.TryGetBody(body1, out PhysicsWorldBody sleeping1), "second body should be readable");
+        AssertTrue(sleeping0.isSleeping && sleeping1.isSleeping, "connected island should sleep together");
+
+        AssertTrue(world.SetBodyVelocity(body0, fix3.right), "setting velocity should wake the body");
+        world.Update(fix.One / 60);
+
+        AssertTrue(world.TryGetBody(body0, out PhysicsWorldBody awake0), "woken body should be readable");
+        AssertFalse(awake0.isSleeping, "moving body should remain awake");
+    }
+
+    private static void TestPhysicsWorldCoreCCDStopsFastBody()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle moving), "moving body should be created");
+        AssertTrue(world.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle target), "target body should be created");
+        AssertTrue(world.AddSphere(moving, fix3.zero, fix._0_5, out ColliderHandle _), "moving sphere should be created");
+        AssertTrue(world.AddSphere(target, fix3.zero, fix._0_5, out ColliderHandle _), "target sphere should be created");
+        AssertTrue(world.SetBodyVelocity(moving, new fix3(10, 0, 0)), "fast velocity should be set");
+
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetBody(moving, out PhysicsWorldBody body), "moving body should be readable");
+        AssertNear(new fix3(4, 0, 0), body.position, fix._0_001);
+        AssertNear(fix3.zero, body.velocity, fix._0_001);
+    }
+
+    private static void TestPhysicsWorldCoreDynamicCCDHandlesDynamicTarget()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.enableDynamicCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle moving), "moving body should be created");
+        AssertTrue(world.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle target), "target body should be created");
+        AssertTrue(world.AddSphere(moving, fix3.zero, fix._0_5, out ColliderHandle _), "moving sphere should be created");
+        AssertTrue(world.AddSphere(target, fix3.zero, fix._0_5, out ColliderHandle _), "target sphere should be created");
+        AssertTrue(world.SetBodyVelocity(moving, new fix3(10, 0, 0)), "fast velocity should be set");
+
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetBody(moving, out PhysicsWorldBody movingBody), "moving body should be readable");
+        AssertTrue(world.TryGetBody(target, out PhysicsWorldBody targetBody), "target body should be readable");
+        AssertNear(new fix3(4, 0, 0), movingBody.position, fix._0_001);
+        AssertEqual(new fix3(5, 0, 0), targetBody.position);
+        AssertNear(fix3.zero, movingBody.velocity, fix._0_001);
+    }
+
+    private static void TestPhysicsWorldCoreMaterialAffectsSolver()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.restitution = fix.Zero;
+        settings.friction = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle dynamicBody), "dynamic body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Static, out BodyHandle staticBody), "static body should be created");
+        AssertTrue(world.AddSphere(dynamicBody, fix3.zero, fix.One, out ColliderHandle dynamicCollider), "dynamic sphere should be created");
+        AssertTrue(world.AddSphere(staticBody, fix3.zero, fix.One, out ColliderHandle staticCollider), "static sphere should be created");
+        Material bouncy = Material.Default;
+        bouncy.SetBounciness(fix.One);
+        AssertTrue(world.SetColliderMaterial(staticCollider, bouncy), "bouncy material should be set");
+        AssertTrue(world.SetBodyVelocity(dynamicBody, fix3.right), "dynamic body velocity should be set");
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetBody(dynamicBody, out PhysicsWorldBody body), "dynamic body should be readable");
+        AssertTrue(body.velocity.x < fix.Zero, "material bounciness should reverse the impact velocity");
+
+        Material sticky = Material.Default;
+        sticky.SetFrictionCoefficient(new fix(2));
+        AssertTrue(world.SetColliderMaterial(dynamicCollider, sticky), "sticky material should be set");
+        AssertTrue(world.SetColliderMaterial(staticCollider, sticky), "sticky static material should be set");
+    }
+
+    private static void TestPhysicsWorldCoreCCDAndSleepDoNotAllocate()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.enableDynamicCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.sleepTime = new fix(10);
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle moving), "moving body should be created");
+        AssertTrue(world.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle target), "target body should be created");
+        AssertTrue(world.AddSphere(moving, fix3.zero, fix._0_5, out ColliderHandle _), "moving sphere should be created");
+        AssertTrue(world.AddSphere(target, fix3.zero, fix._0_5, out ColliderHandle _), "target sphere should be created");
+
+        for (int i = 0; i < 4; i++)
+        {
+            AssertTrue(world.SetBodyTransform(moving, fix3.zero, quaternion.identity), "moving body should reset");
+            AssertTrue(world.SetBodyVelocity(moving, new fix3(10, 0, 0)), "moving velocity should reset");
+            world.Update(fix.One);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 16; i++)
+        {
+            AssertTrue(world.SetBodyTransform(moving, fix3.zero, quaternion.identity), "moving body should reset in warm loop");
+            AssertTrue(world.SetBodyVelocity(moving, new fix3(10, 0, 0)), "moving velocity should reset in warm loop");
+            world.Update(fix.One);
+            AssertTrue(world.TryGetBody(moving, out PhysicsWorldBody movingBody), "moving body should be readable");
+            AssertNear(new fix3(4, 0, 0), movingBody.position, fix._0_001);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        AssertTrue(allocated == 0, $"core CCD/sleep warm path allocated {allocated} bytes");
+    }
+
+    private static void TestPhysicsWorldCoreExposesStepStatsAndIslandIds()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.sleepTime = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle _), "first sphere should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle _), "second sphere should be created");
+
+        world.Update(fix.Zero);
+
+        PhysicsWorldStepStats stats = world.LastStepStats;
+        AssertEqual(2, stats.activeBodyCount);
+        AssertEqual(2, stats.activeColliderCount);
+        AssertEqual(2, stats.broadphaseProxyCount);
+        AssertEqual(1, stats.pairCount);
+        AssertEqual(1, stats.contactManifoldCount);
+        AssertEqual(1, stats.islandCount);
+        AssertTrue(world.TryGetBodyIslandId(body0, out int island0), "first body should expose an island id");
+        AssertTrue(world.TryGetBodyIslandId(body1, out int island1), "second body should expose an island id");
+        AssertEqual(island0, island1);
+    }
+
+    private static void TestPhysicsWorldCoreExposesCapacityAndMemoryBudget()
+    {
+        PhysicsWorldCapacity capacity = PhysicsWorldCapacity.ForBodies(8, 2, 3);
+        AssertTrue(capacity.IsValid, "capacity helper should produce a valid capacity block");
+        AssertEqual(8, capacity.bodyCapacity);
+        AssertEqual(16, capacity.colliderCapacity);
+        AssertEqual(48, capacity.pairCapacity);
+        AssertEqual(48, capacity.contactManifoldCapacity);
+
+        PhysicsWorldMemoryBudget budget = capacity.EstimateMemoryBudget();
+        AssertTrue(budget.bodyBytes > 0, "body budget should be reported");
+        AssertTrue(budget.colliderBytes > 0, "collider budget should be reported");
+        AssertTrue(budget.broadphaseBytes > 0, "broadphase budget should be reported");
+        AssertTrue(budget.totalBytes >= budget.bodyBytes + budget.colliderBytes, "total budget should include major components");
+
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(capacity);
+        AssertEqual(8, world.BodyCapacity);
+        AssertEqual(16, world.ColliderCapacity);
+        AssertEqual(48, world.PairCapacity);
+        AssertEqual(48, world.ContactManifoldCapacity);
+        AssertEqual(16, world.Capacity.colliderCapacity);
+        AssertEqual(48, world.Capacity.contactManifoldCapacity);
+        AssertTrue(world.EstimatedMemoryBudget.totalBytes >= budget.totalBytes, "world budget should reflect reserved buffers");
+
+        world.Update(fix.Zero);
+        PhysicsWorldStepStats stats = world.LastStepStats;
+        AssertEqual(8, stats.bodyCapacity);
+        AssertEqual(16, stats.colliderCapacity);
+        AssertEqual(48, stats.pairCapacity);
+        AssertEqual(48, stats.contactManifoldCapacity);
+    }
+
+    private static void TestPhysicsWorldCoreReportsCapacityOverflowInStats()
+    {
+        PhysicsWorld pairWorld = new PhysicsWorld(new PhysicsWorldSettings(false));
+        pairWorld.Reserve(3, 3, 1, 8);
+        for (int i = 0; i < 3; i++)
+        {
+            AssertTrue(pairWorld.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "body should be created");
+            AssertTrue(pairWorld.AddSphere(body, fix3.zero, fix.One, out ColliderHandle _), "collider should be created");
+        }
+
+        pairWorld.Update(fix.Zero);
+        AssertEqual(1, pairWorld.PairCount);
+        AssertTrue(pairWorld.PairOverflowed, "pair capacity should overflow");
+        AssertTrue(pairWorld.LastStepStats.pairOverflowed, "stats should report pair overflow");
+        AssertTrue(pairWorld.LastStepStats.HasOverflow, "stats should expose overflow summary");
+
+        PhysicsWorld contactWorld = new PhysicsWorld(new PhysicsWorldSettings(false));
+        contactWorld.Reserve(3, 3, 8, 1);
+        for (int i = 0; i < 3; i++)
+        {
+            AssertTrue(contactWorld.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "body should be created");
+            AssertTrue(contactWorld.AddSphere(body, fix3.zero, fix.One, out ColliderHandle _), "collider should be created");
+        }
+
+        contactWorld.Update(fix.Zero);
+        AssertEqual(3, contactWorld.PairCount);
+        AssertEqual(1, contactWorld.ContactManifoldCount);
+        AssertTrue(contactWorld.ContactOverflowed, "contact manifold capacity should overflow");
+        AssertTrue(contactWorld.LastStepStats.contactOverflowed, "stats should report contact overflow");
+        AssertTrue(contactWorld.LastStepStats.HasOverflow, "stats should expose contact overflow summary");
+        AssertEqual(3, contactWorld.LastStepStats.narrowPhaseTestCount);
+        AssertEqual(1, contactWorld.LastStepStats.contactManifoldNewCount);
+        AssertEqual(2, contactWorld.LastStepStats.contactManifoldDroppedCount);
+    }
+
+    private static void TestPhysicsWorldCoreReportsPerformanceCounters()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 8, 8);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddSphere(body0, fix3.zero, fix.One, out ColliderHandle _), "first sphere should be created");
+        AssertTrue(world.AddSphere(body1, fix3.zero, fix.One, out ColliderHandle _), "second sphere should be created");
+
+        world.Update(fix.Zero);
+
+        PhysicsWorldStepStats first = world.LastStepStats;
+        AssertTrue(first.broadphaseCandidateCount >= 2, "stats should report broadphase candidates");
+        AssertTrue(first.broadphaseFilteredCandidateCount >= 1, "stats should report self/duplicate filtering");
+        AssertEqual(1, first.pairCount);
+        AssertEqual(1, first.narrowPhaseTestCount);
+        AssertEqual(1, first.contactManifoldCount);
+        AssertEqual(1, first.contactManifoldNewCount);
+        AssertEqual(0, first.contactManifoldReusedCount);
+        AssertEqual(0, first.contactManifoldDroppedCount);
+        AssertEqual(1, first.solverContactPointCount);
+        AssertEqual(0, first.sleepingBodyCount);
+        AssertEqual(2, first.awakeDynamicBodyCount);
+
+        world.Update(fix.Zero);
+
+        PhysicsWorldStepStats second = world.LastStepStats;
+        AssertEqual(1, second.narrowPhaseTestCount);
+        AssertEqual(0, second.contactManifoldNewCount);
+        AssertEqual(1, second.contactManifoldReusedCount);
+        AssertEqual(1, second.solverContactPointCount);
+    }
+
+    private static void TestPhysicsWorldCoreDirtySyncUpdatesChangedCollidersOnly()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(4, 4, 8, 8);
+        BodyHandle[] bodies = new BodyHandle[4];
+        ColliderHandle[] colliders = new ColliderHandle[4];
+        for (int i = 0; i < bodies.Length; i++)
+        {
+            AssertTrue(world.CreateBody(new fix3(i * 4, 0, 0), quaternion.identity, RigidType.Static, out bodies[i]), "body should be created");
+            AssertTrue(world.AddSphere(bodies[i], fix3.zero, fix._0_5, out colliders[i]), "collider should be created");
+        }
+
+        world.Update(fix.Zero);
+        PhysicsWorldStepStats first = world.LastStepStats;
+        AssertEqual(0, first.bodySyncCount);
+        AssertEqual(0, first.colliderSyncCount);
+        AssertEqual(4, first.broadphaseMovedProxyCount);
+
+        world.Update(fix.Zero);
+        PhysicsWorldStepStats stable = world.LastStepStats;
+        AssertEqual(0, stable.bodySyncCount);
+        AssertEqual(0, stable.colliderSyncCount);
+        AssertEqual(0, stable.broadphaseMovedProxyCount);
+
+        AssertTrue(world.SetBodyTransform(bodies[2], new fix3(20, 0, 0), quaternion.identity), "moving one body should succeed");
+        world.Update(fix.Zero);
+
+        PhysicsWorldStepStats movedOne = world.LastStepStats;
+        AssertEqual(1, movedOne.bodySyncCount);
+        AssertEqual(1, movedOne.colliderSyncCount);
+        AssertEqual(1, movedOne.broadphaseMovedProxyCount);
+
+        AssertTrue(world.SetBodyTransform(bodies[0], new fix3(40, 0, 0), quaternion.identity), "moving body should mark collider dirty");
+        AssertTrue(world.TryGetColliderBounds(colliders[0], out AABB bounds), "bounds getter should flush dirty collider state");
+        AssertEqual(new fix3(40, 0, 0), bounds.center);
+    }
+
+    private static void TestPhysicsWorldCoreAutoMassCanBeReenabled()
+    {
+        PhysicsWorld world = new PhysicsWorld(new PhysicsWorldSettings(false));
+        world.Reserve(1, 1, 2, 2);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "body should be created");
+        AssertTrue(world.AddAABB(body, fix3.zero, new fix3(2, 2, 2), out ColliderHandle collider), "collider should be created");
+
+        AssertTrue(world.SetBodyMass(body, new fix(5)), "manual mass should be set");
+        AssertTrue(world.SetBodyInertia(body, new fix3(7, 8, 9)), "manual inertia should be set");
+        AssertTrue(world.SetColliderDensity(collider, fix._2), "density should update material");
+        AssertTrue(world.TryGetBody(body, out PhysicsWorldBody manual), "manual body should be readable");
+        AssertEqual(new fix(5), manual.mass);
+        AssertEqual(new fix3(7, 8, 9), manual.inertia);
+
+        AssertTrue(world.SetBodyAutoMassProperties(body, true, true), "auto mass properties should be re-enabled");
+        AssertTrue(world.TryGetBody(body, out PhysicsWorldBody automatic), "automatic body should be readable");
+        fix expectedInertia = new fix(128) / 12;
+        AssertEqual(new fix(16), automatic.mass);
+        AssertEqual(new fix3(expectedInertia, expectedInertia, expectedInertia), automatic.inertia);
+    }
+
+    private static void TestPhysicsWorldCoreLongReplayWithLifecycleIsDeterministic()
+    {
+        PhysicsWorld first = CreateLifecycleReplayWorld();
+        PhysicsWorld second = CreateLifecycleReplayWorld();
+        ColliderHandle firstToggled = default;
+        ColliderHandle secondToggled = default;
+        ColliderHandle firstDestroyed = default;
+        ColliderHandle secondDestroyed = default;
+        BodyHandle firstTransient = default;
+        BodyHandle secondTransient = default;
+
+        ulong firstHash = 0;
+        ulong secondHash = 0;
+        for (int i = 0; i < 1000; i++)
+        {
+            ApplyLifecycleReplayInput(first, i, ref firstToggled, ref firstDestroyed, ref firstTransient);
+            ApplyLifecycleReplayInput(second, i, ref secondToggled, ref secondDestroyed, ref secondTransient);
+            firstHash = first.StepAndComputeStateHash(fix.One / 60);
+            secondHash = second.StepAndComputeStateHash(fix.One / 60);
+            AssertEqual(firstHash, secondHash);
+        }
+
+        AssertEqual(firstHash, first.ComputeStateHash());
+        AssertEqual(secondHash, second.ComputeStateHash());
+    }
+
+    private static PhysicsWorld CreateLifecycleReplayWorld()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.solverIterations = 2;
+        settings.positionIterations = 2;
+        settings.sleepTime = new fix(5);
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(6, 8, 24, 24);
+        AssertTrue(world.CreateBody(new fix3(-4, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle moving), "moving body should be created");
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Static, out BodyHandle wall), "wall body should be created");
+        AssertTrue(world.CreateBody(new fix3(3, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle toggled), "toggled body should be created");
+        AssertTrue(world.CreateBody(new fix3(6, 0, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle removed), "removed body should be created");
+        AssertTrue(world.AddSphere(moving, fix3.zero, fix._0_5, out ColliderHandle _), "moving sphere should be created");
+        AssertTrue(world.AddAABB(wall, fix3.zero, new fix3(1, 4, 4), out ColliderHandle _), "wall collider should be created");
+        AssertTrue(world.AddSphere(toggled, fix3.zero, fix._0_5, out ColliderHandle toggleCollider), "toggle collider should be created");
+        AssertTrue(world.AddSphere(removed, fix3.zero, fix._0_5, out ColliderHandle removedCollider), "removed collider should be created");
+        AssertTrue(world.SetBodyVelocity(moving, new fix3(7, 0, 0)), "moving velocity should be set");
+        AssertTrue(world.SetBodyVelocity(toggled, new fix3(-fix._0_5, fix.Zero, fix.Zero)), "toggled velocity should be set");
+        AssertTrue(world.SetBodyVelocity(removed, new fix3(-fix.One, fix.Zero, fix.Zero)), "removed velocity should be set");
+        return world;
+    }
+
+    private static void ApplyLifecycleReplayInput(
+        PhysicsWorld world,
+        int frame,
+        ref ColliderHandle toggledCollider,
+        ref ColliderHandle destroyedCollider,
+        ref BodyHandle transientBody)
+    {
+        if (frame == 0)
+        {
+            for (int i = 0; i < world.PairCount; i++)
+            {
+                world.TryGetPair(i, out PhysicsWorldPair _);
+            }
+        }
+
+        if (frame == 30 && !toggledCollider.IsValid)
+        {
+            AssertTrue(world.CreateBody(new fix3(8, 0, 0), quaternion.identity, RigidType.Dynamic, out transientBody), "transient body should be created");
+            AssertTrue(world.AddSphere(transientBody, fix3.zero, fix._0_5, out toggledCollider), "transient collider should be created");
+            AssertTrue(world.SetBodyVelocity(transientBody, new fix3(-2, 0, 0)), "transient velocity should be set");
+        }
+
+        if (frame == 120 && toggledCollider.IsValid)
+        {
+            AssertTrue(world.SetColliderEnabled(toggledCollider, false), "transient collider should be disabled");
+        }
+
+        if (frame == 180 && toggledCollider.IsValid)
+        {
+            AssertTrue(world.SetColliderEnabled(toggledCollider, true), "transient collider should be enabled");
+        }
+
+        if (frame == 240 && transientBody.IsValid)
+        {
+            AssertTrue(world.DestroyBody(transientBody), "transient body should be destroyed");
+            transientBody = BodyHandle.Invalid;
+            toggledCollider = ColliderHandle.Invalid;
+        }
+
+        if (frame == 360 && !destroyedCollider.IsValid)
+        {
+            AssertTrue(world.CreateBody(new fix3(-6, 1, 0), quaternion.identity, RigidType.Dynamic, out BodyHandle body), "late body should be created");
+            AssertTrue(world.AddCapsule(body, fix3.zero, fix._0_25, new fix(2), quaternion.identity, out destroyedCollider), "late capsule should be created");
+            AssertTrue(world.SetBodyVelocity(body, new fix3(new fix(3), -fix._0_5, fix.Zero)), "late body velocity should be set");
+        }
+
+        if (frame == 500 && destroyedCollider.IsValid)
+        {
+            AssertTrue(world.DestroyCollider(destroyedCollider), "late collider should be destroyed");
+            destroyedCollider = ColliderHandle.Invalid;
+        }
+    }
+
+    private static void TestPhysicsWorldCoreClampsUnsafeMotionValues()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.maxTranslationPerStep = fix._0_5;
+        settings.maxLinearVelocity = fix.Zero;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(1, 1, 1, 1);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "body should be created");
+        AssertTrue(world.AddSphere(body, fix3.zero, fix.One, out ColliderHandle _), "collider should be created");
+        AssertTrue(world.SetBodyVelocity(body, new fix3(100, 0, 0)), "unsafe velocity should be accepted and clamped");
+
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetBody(body, out PhysicsWorldBody synced), "body should be readable");
+        AssertTrue(synced.position.x <= fix._0_5, "per-step translation should be clamped");
+        AssertTrue(synced.velocity.x <= fix._0_5, "velocity should be clamped for the step");
+
+        AssertTrue(world.SetBodyVelocity(body, fix3.NaN), "NaN velocity input should be sanitized");
+        AssertTrue(world.TryGetBody(body, out synced), "sanitized body should be readable");
+        AssertEqual(fix3.zero, synced.velocity);
+    }
+
+    private static void TestPhysicsWorldCoreStackedBoxesStaySeparated()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(true);
+        settings.gravity = new fix3(fix.Zero, -new fix(10), fix.Zero);
+        settings.solverIterations = 8;
+        settings.positionIterations = 4;
+        settings.positionCorrectionPercent = fix._0_2;
+        settings.penetrationSlop = fix._0_01;
+        settings.sleepTime = new fix(10);
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(4, 4, 16, 16);
+        AssertTrue(world.CreateBody(new fix3(fix.Zero, -fix._0_5, fix.Zero), quaternion.identity, RigidType.Static, out BodyHandle ground), "ground should be created");
+        AssertTrue(world.CreateBody(new fix3(fix.Zero, fix._0_5, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle box0), "first box should be created");
+        AssertTrue(world.CreateBody(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle box1), "second box should be created");
+        AssertTrue(world.CreateBody(new fix3(fix.Zero, new fix(5) * fix._0_5, fix.Zero), quaternion.identity, RigidType.Dynamic, out BodyHandle box2), "third box should be created");
+        AssertTrue(world.AddAABB(ground, fix3.zero, new fix3(8, 1, 8), out ColliderHandle _), "ground collider should be created");
+        AssertTrue(world.AddAABB(box0, fix3.zero, new fix3(1, 1, 1), out ColliderHandle _), "first box collider should be created");
+        AssertTrue(world.AddAABB(box1, fix3.zero, new fix3(1, 1, 1), out ColliderHandle _), "second box collider should be created");
+        AssertTrue(world.AddAABB(box2, fix3.zero, new fix3(1, 1, 1), out ColliderHandle _), "third box collider should be created");
+
+        for (int i = 0; i < 90; i++)
+        {
+            world.Step(fix.One / 60);
+        }
+
+        AssertTrue(world.TryGetBody(box0, out PhysicsWorldBody lower), "lower box should be readable");
+        AssertTrue(world.TryGetBody(box1, out PhysicsWorldBody middle), "middle box should be readable");
+        AssertTrue(world.TryGetBody(box2, out PhysicsWorldBody upper), "upper box should be readable");
+        AssertTrue(lower.position.y >= fix._0_25, $"lower box should stay above the floor, got {lower.position.y}");
+        AssertTrue(middle.position.y - lower.position.y >= fix._0_5, $"middle box should stay above lower box, got lower {lower.position.y}, middle {middle.position.y}");
+        AssertTrue(upper.position.y - middle.position.y >= fix._0_5, $"upper box should stay above middle box, got middle {middle.position.y}, upper {upper.position.y}");
+    }
+
+    private static void TestPhysicsWorldCoreCCDSweepsCapsuleAndCompoundColliders()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        PhysicsWorld capsuleWorld = new PhysicsWorld(settings);
+        capsuleWorld.Reserve(2, 2, 4, 4);
+        AssertTrue(capsuleWorld.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle capsule), "capsule body should be created");
+        AssertTrue(capsuleWorld.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle wall), "wall body should be created");
+        AssertTrue(capsuleWorld.AddCapsule(capsule, fix3.zero, fix._0_5, new fix(3), quaternion.identity, out ColliderHandle _), "capsule collider should be created");
+        AssertTrue(capsuleWorld.AddAABB(wall, fix3.zero, new fix3(1, 4, 4), out ColliderHandle _), "wall collider should be created");
+        AssertTrue(capsuleWorld.SetBodyVelocity(capsule, new fix3(10, 0, 0)), "capsule velocity should be set");
+
+        capsuleWorld.Update(fix.One);
+
+        AssertTrue(capsuleWorld.TryGetBody(capsule, out PhysicsWorldBody capsuleBody), "capsule body should be readable");
+        AssertNear(new fix3(4, 0, 0), capsuleBody.position, fix._0_001);
+
+        PhysicsWorld compoundWorld = new PhysicsWorld(settings);
+        compoundWorld.Reserve(2, 3, 8, 8);
+        AssertTrue(compoundWorld.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle compound), "compound body should be created");
+        AssertTrue(compoundWorld.CreateBody(new fix3(5, 0, 0), quaternion.identity, RigidType.Static, out BodyHandle target), "target body should be created");
+        AssertTrue(compoundWorld.AddSphere(compound, new fix3(1, 0, 0), fix._0_5, out ColliderHandle _), "front sphere should be created");
+        AssertTrue(compoundWorld.AddSphere(compound, new fix3(-1, 0, 0), fix._0_5, out ColliderHandle _), "back sphere should be created");
+        AssertTrue(compoundWorld.AddAABB(target, fix3.zero, new fix3(1, 4, 4), out ColliderHandle _), "target collider should be created");
+        AssertTrue(compoundWorld.SetBodyVelocity(compound, new fix3(10, 0, 0)), "compound velocity should be set");
+
+        compoundWorld.Update(fix.One);
+
+        AssertTrue(compoundWorld.TryGetBody(compound, out PhysicsWorldBody compoundBody), "compound body should be readable");
+        AssertNear(new fix3(3, 0, 0), compoundBody.position, fix._0_001);
+    }
+
+    private static void TestPhysicsWorldCoreContactLifetimePersists()
+    {
+        PhysicsWorldSettings settings = new PhysicsWorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.warmStartScale = fix.One;
+        PhysicsWorld world = new PhysicsWorld(settings);
+        world.Reserve(2, 2, 4, 4);
+        AssertTrue(world.CreateBody(fix3.zero, quaternion.identity, RigidType.Dynamic, out BodyHandle body0), "first body should be created");
+        AssertTrue(world.CreateBody(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity, RigidType.Static, out BodyHandle body1), "second body should be created");
+        AssertTrue(world.AddAABB(body0, fix3.zero, new fix3(2, 2, 2), out ColliderHandle _), "first box should be created");
+        AssertTrue(world.AddAABB(body1, fix3.zero, new fix3(2, 2, 2), out ColliderHandle _), "second box should be created");
+        AssertTrue(world.SetBodyVelocity(body0, fix3.right), "first body velocity should be set");
+
+        world.Update(fix.Zero);
+        AssertTrue(world.TryGetContactManifold(0, out PhysicsWorldManifold first), "first contact should be readable");
+        int firstLifetime = 0;
+        fix firstImpulse = fix.Zero;
+        for (int i = 0; i < first.contactCount; i++)
+        {
+            firstLifetime = math.max(firstLifetime, first[i].lifetime);
+            firstImpulse = math.max(firstImpulse, first[i].normalImpulse);
+        }
+
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetContactManifold(0, out PhysicsWorldManifold second), "second contact should be readable");
+        int secondLifetime = 0;
+        fix secondImpulse = fix.Zero;
+        for (int i = 0; i < second.contactCount; i++)
+        {
+            secondLifetime = math.max(secondLifetime, second[i].lifetime);
+            secondImpulse = math.max(secondImpulse, second[i].normalImpulse);
+        }
+
+        AssertTrue(secondLifetime > firstLifetime, "contact lifetime should persist across stable frames");
+        AssertTrue(secondImpulse > fix.Zero && firstImpulse > fix.Zero, "warm-start contact should keep a non-zero impulse on at least one persistent point");
     }
 
     private static void TestBroadphaseTreeUpdatesMovingPairs()
@@ -489,6 +1479,32 @@ internal static class Program
         AssertTrue(PhysicsApi.TryComputeGJKEPAContact(box0, box1, out CollisionInfo collision), "EPA should generate a rotated box contact");
         AssertTrue(collision.penetrationDepth > fix.Zero, "EPA rotated box contact should report penetration");
         AssertTrue(collision.contactCount > 0, "EPA rotated box contact should include a contact point");
+    }
+
+    private static void TestGJKEPAWarmPathDoesNotAllocate()
+    {
+        quaternion rotation0 = quaternion.RotateZ(math.PI * fix._0_25);
+        quaternion rotation1 = quaternion.RotateZ(-math.PI * fix._0_25);
+        OBB box0 = new OBB(fix3.zero, new fix3(2, 2, 2), rotation0);
+        OBB box1 = new OBB(new fix3(fix._1_5, fix.Zero, fix.Zero), new fix3(2, 2, 2), rotation1);
+        Shape shape0 = box0;
+        Shape shape1 = box1;
+
+        AssertTrue(PhysicsApi.TryComputeGJKEPAContact(shape0, shape1, out CollisionInfo _), "warmup EPA contact should succeed");
+        for (int i = 0; i < 16; i++)
+        {
+            AssertTrue(PhysicsApi.TryComputeGJKEPAContact(shape0, shape1, out CollisionInfo _), "EPA buffers should warm to steady capacity");
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 16; i++)
+        {
+            AssertTrue(PhysicsApi.TryComputeGJKEPAContact(shape0, shape1, out CollisionInfo collision), "warm EPA contact should succeed without allocation");
+            AssertTrue(collision.contactCount > 0, "warm EPA contact should keep contact data");
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        AssertTrue(allocated == 0, $"warm EPA path allocated {allocated} bytes");
     }
 
     private static void TestCapsuleOBBContactUsesSegmentBoxDistance()
@@ -1376,6 +2392,30 @@ internal static class Program
         AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
     }
 
+    private static void TestSolverAppliesTwoAxisFriction()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.friction = fix._2;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid dynamicRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(fix.Zero, fix._1_5, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(dynamicRigid.id, fix3.zero, fix.One);
+        world.AddSphereCollider(staticRigid.id, fix3.zero, fix.One);
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetInertia(dynamicRigid.id, fix3.zero);
+        world.SetVelocity(dynamicRigid.id, new fix3(1, 1, 1));
+        world.Update(fix.Zero);
+
+        AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedDynamic), "dynamic rigid should exist");
+        AssertNear(fix3.zero, syncedDynamic.velocity, fix._0_0001);
+        AssertEqual(1, world.ContactManifolds.Count);
+        ContactPoint point = world.ContactManifolds[0][0];
+        AssertTrue(math.abs(point.tangentImpulse0) > math.Epsilon, "first tangent impulse should be used");
+        AssertTrue(math.abs(point.tangentImpulse1) > math.Epsilon, "second tangent impulse should be used");
+    }
+
     private static void TestRestitutionThresholdSuppressesLowSpeedBounce()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1470,12 +2510,14 @@ internal static class Program
     private static void TestShapeAndConstraintFrameworksExposeCapabilities()
     {
         ShapeDescriptor sphere = PhysicsApi.GetShapeDescriptor(ShapeType.Sphere);
+        ShapeDescriptor obb = PhysicsApi.GetShapeDescriptor(ShapeType.OBB);
         ShapeDescriptor triangleMesh = PhysicsApi.GetShapeDescriptor(ShapeType.TriangleMesh);
         ConstraintDescriptor hinge = ConstraintRegistry.GetDescriptor(ConstraintType.Hinge);
         ConstraintDescriptor sixDof = ConstraintRegistry.GetDescriptor(ConstraintType.SixDof);
 
         AssertTrue(sphere.implemented, "sphere should be an implemented primitive shape");
         AssertTrue((sphere.capabilities & ShapeCapabilities.ShapeCast) != 0, "sphere descriptor should expose shape cast support");
+        AssertTrue((obb.capabilities & ShapeCapabilities.ShapeCast) != 0, "OBB descriptor should expose SAT shape cast support");
         AssertFalse(triangleMesh.implemented, "triangle mesh should be framework-only for now");
         AssertEqual((int)ShapeCategory.SceneGeometry, (int)triangleMesh.category);
         AssertTrue(hinge.implemented, "hinge descriptor should be implemented");
@@ -1511,6 +2553,16 @@ internal static class Program
         AssertEqual(fix3.right, capsuleHit.normal);
     }
 
+    private static void TestPhysicsShapeCastSweepsOBBWithSAT()
+    {
+        OBB moving = new OBB(fix3.zero, new fix3(2, 2, 2), quaternion.RotateZ(math.PI * fix._0_25));
+        AABB target = new AABB(new fix3(5, 0, 0), new fix3(2, 2, 2));
+
+        AssertTrue(PhysicsApi.TryShapeCast(moving, target, new fix3(10, 0, 0), out ShapeCastHit hit), "OBB should use swept SAT shape cast");
+        AssertTrue(hit.fraction > fix.Zero && hit.fraction < fix.One, "swept SAT shape cast should report a valid time of impact");
+        AssertEqual(fix3.right, hit.normal);
+    }
+
     private static void TestWorldClampsUnsafeMotionValues()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1532,6 +2584,15 @@ internal static class Program
         AssertEqual(fix3.zero, syncedRigid.velocity);
     }
 
+    private static void TestCapsuleZeroAxisStaysNumericallySafe()
+    {
+        Capsule capsule = new Capsule(fix3.zero, fix._0_5, new fix(3), quaternion.identity, fix3.zero);
+
+        AssertEqual(fix3.up, capsule.Axis);
+        AssertTrue(PhysicsSafety.IsFinite(capsule.Center1), "capsule endpoint should be finite");
+        AssertTrue(PhysicsSafety.IsFinite(capsule.Center2), "capsule endpoint should be finite");
+    }
+
     private static void TestSolverClampsContactImpulses()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1551,6 +2612,26 @@ internal static class Program
         AssertTrue(syncedRigid.velocity.x >= new fix(9), "contact impulse clamp should limit solver velocity correction");
         AssertEqual(1, world.ContactManifolds.Count);
         AssertTrue(world.ContactManifolds[0][0].normalImpulse <= fix._0_5, "stored normal impulse should be clamped");
+    }
+
+    private static void TestSolverContactVelocityBiasSeparatesPenetration()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        settings.contactVelocityBiasFactor = fix._0_2;
+        settings.maxContactBiasVelocity = fix.One;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetRigid(rigid0.id, out Rigid synced0), "first rigid should exist");
+        AssertTrue(world.TryGetRigid(rigid1.id, out Rigid synced1), "second rigid should exist");
+        AssertTrue(synced0.velocity.x < fix.Zero, "bias should push first body away");
+        AssertTrue(synced1.velocity.x > fix.Zero, "bias should push second body away");
     }
 
     private static void TestContactManifoldSettingsControlPersistence()
@@ -1646,6 +2727,33 @@ internal static class Program
         AssertEqual(1, world.LastStepStats.deferredLifecycleOperationCount);
     }
 
+    private static void TestCollisionCallbackCanCreateBodiesSafely()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid rigid0 = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid rigid1 = world.CreateRigid(new fix3(fix._1_5, fix.Zero, fix.Zero), quaternion.identity);
+        Collider collider0 = world.AddSphereCollider(rigid0.id, fix3.zero, fix.One);
+        world.AddSphereCollider(rigid1.id, fix3.zero, fix.One);
+        ulong createdRigidId = 0;
+        int enterCount = 0;
+
+        collider0.OnCollisionEnter += collision =>
+        {
+            enterCount++;
+            Rigid created = world.CreateRigid(new fix3(10, 0, 0), quaternion.identity);
+            world.AddSphereCollider(created.id, fix3.zero, fix.One);
+            createdRigidId = created.id;
+        };
+
+        world.Update(fix.Zero);
+
+        AssertEqual(1, enterCount);
+        AssertTrue(createdRigidId != 0, "callback should create a body");
+        AssertTrue(world.TryGetRigid(createdRigidId, out Rigid _), "created rigid should be registered after callback");
+    }
+
     private static void TestCollisionCallbackExceptionsCanBeCaptured()
     {
         WorldSettings settings = new WorldSettings(false);
@@ -1711,6 +2819,27 @@ internal static class Program
         AssertNear(new fix3(4, 0, 0), entity.translation, fix._0_0001);
         AssertTrue(world.TryGetRigid(dynamicRigid.id, out Rigid syncedRigid), "dynamic capsule rigid should exist");
         AssertEqual(fix.Zero, syncedRigid.velocity.x);
+    }
+
+    private static void TestCCDUsesEarliestCompoundColliderHit()
+    {
+        WorldSettings settings = new WorldSettings(false);
+        settings.enableCCD = true;
+        settings.ccdMinVelocity = fix.Zero;
+        settings.positionCorrectionPercent = fix.Zero;
+        World world = new World(settings);
+        Rigid compoundRigid = world.CreateRigid(fix3.zero, quaternion.identity);
+        Rigid staticRigid = world.CreateRigid(new fix3(5, 0, 0), quaternion.identity);
+        world.AddSphereCollider(compoundRigid.id, new fix3(1, 0, 0), fix._0_5);
+        world.AddSphereCollider(compoundRigid.id, new fix3(-1, 0, 0), fix._0_5);
+        world.AddAABBCollider(staticRigid.id, fix3.zero, new fix3(1, 4, 4));
+
+        world.SetRigidType(staticRigid.id, RigidType.Static);
+        world.SetVelocity(compoundRigid.id, new fix3(10, 0, 0));
+        world.Update(fix.One);
+
+        AssertTrue(world.TryGetEntity(compoundRigid.id, out Entity entity), "compound rigid entity should exist");
+        AssertNear(new fix3(3, 0, 0), entity.translation, fix._0_001);
     }
 
     private static void TestCCDSweepsSphereAgainstSphere()

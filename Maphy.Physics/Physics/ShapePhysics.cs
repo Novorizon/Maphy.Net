@@ -21,7 +21,7 @@ namespace Maphy.Physics
                     return new ShapeDescriptor(
                         type,
                         ShapeCategory.Primitive,
-                        ShapeCapabilities.Bounds | ShapeCapabilities.SupportMapping | ShapeCapabilities.Overlap | ShapeCapabilities.ContactManifold | ShapeCapabilities.Raycast,
+                        ShapeCapabilities.Bounds | ShapeCapabilities.SupportMapping | ShapeCapabilities.Overlap | ShapeCapabilities.ContactManifold | ShapeCapabilities.Raycast | ShapeCapabilities.ShapeCast,
                         true);
                 case ShapeType.Sphere:
                     return new ShapeDescriptor(

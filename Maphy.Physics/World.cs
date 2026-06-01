@@ -38,6 +38,7 @@ namespace Maphy.Physics
         private int lastDeferredLifecycleOperationCount;
         private int currentCallbackExceptionCount;
         private int lastCallbackExceptionCount;
+        private fix currentDeltaTime;
         private bool isFlushingDeferredLifecycleOperations;
 
         public IReadOnlyDictionary<ulong, Entity> Entities => entities;
@@ -71,6 +72,13 @@ namespace Maphy.Physics
 
         public void Reserve(int rigidCapacity, int colliderCapacity, int constraintCapacity)
         {
+            EnsureDictionaryCapacity(entities, rigidCapacity);
+            EnsureDictionaryCapacity(rigids, rigidCapacity);
+            EnsureDictionaryCapacity(colliders, colliderCapacity);
+            EnsureDictionaryCapacity(constraints, constraintCapacity);
+            EnsureHashSetCapacity(islandVisited, rigidCapacity);
+            EnsureDictionaryCapacity(activeCollisionEvents, colliderCapacity * 2);
+            EnsureDictionaryCapacity(nextCollisionEvents, colliderCapacity * 2);
             EnsureListCapacity(rigidIds, rigidCapacity);
             EnsureListCapacity(colliderIds, colliderCapacity);
             EnsureListCapacity(constraintIds, constraintCapacity);
@@ -79,6 +87,9 @@ namespace Maphy.Physics
             EnsureListCapacity(islandStack, rigidCapacity);
             EnsureListCapacity(colliderRemovalBuffer, colliderCapacity);
             EnsureListCapacity(constraintRemovalBuffer, constraintCapacity);
+            EnsureListCapacity(collisionEventRemovalBuffer, colliderCapacity);
+            EnsureListCapacity(deferredLifecycleOperations, rigidCapacity + colliderCapacity + constraintCapacity);
+            collisionSystem.Reserve(colliderCapacity);
         }
 
         public void Update()
@@ -140,6 +151,7 @@ namespace Maphy.Physics
             lastDeferredLifecycleOperationCount = 0;
             currentCallbackExceptionCount = 0;
             LastCallbackException = null;
+            currentDeltaTime = deltaTime;
             IntegrateForces(deltaTime);
             SyncColliders();
             IntegrateTransforms(deltaTime);
@@ -1526,10 +1538,6 @@ namespace Maphy.Physics
             fix3 velocity1 = hasRigid1 ? SolverContext.GetVelocityAtPoint(rigid1, r1) : fix3.zero;
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
-            if (normalVelocity > fix.Zero && point.lifetime <= 1)
-            {
-                return;
-            }
 
             fix effectiveMass = inverseMass0 + inverseMass1
                 + SolverContext.GetAngularEffectiveMass(rigid0, r0, manifold.normal)
@@ -1539,9 +1547,13 @@ namespace Maphy.Physics
                 return;
             }
 
-            fix restitutionThreshold = math.max(fix.Zero, settings.restitutionVelocityThreshold);
-            fix restitution = normalVelocity < -restitutionThreshold ? GetCombinedRestitution(manifold) : fix.Zero;
-            fix normalImpulseDelta = -(fix.One + restitution) * normalVelocity / effectiveMass;
+            fix targetNormalVelocity = ComputeContactTargetNormalVelocity(manifold, point, normalVelocity);
+            if (normalVelocity >= targetNormalVelocity && point.lifetime <= 1)
+            {
+                return;
+            }
+
+            fix normalImpulseDelta = (targetNormalVelocity - normalVelocity) / effectiveMass;
             fix previousNormalImpulse = point.normalImpulse;
             point.normalImpulse = math.max(fix.Zero, previousNormalImpulse + normalImpulseDelta);
             fix maxContactImpulse = math.max(fix.Zero, settings.maxContactImpulse);
@@ -1568,6 +1580,32 @@ namespace Maphy.Physics
             }
         }
 
+        private fix ComputeContactTargetNormalVelocity(ContactManifold manifold, ContactPoint point, fix normalVelocity)
+        {
+            fix targetVelocity = fix.Zero;
+            fix restitutionThreshold = math.max(fix.Zero, settings.restitutionVelocityThreshold);
+            if (normalVelocity < -restitutionThreshold)
+            {
+                targetVelocity = -GetCombinedRestitution(manifold) * normalVelocity;
+            }
+
+            fix biasFactor = math.max(fix.Zero, settings.contactVelocityBiasFactor);
+            fix penetration = point.penetrationDepth - settings.penetrationSlop;
+            if (biasFactor > fix.Zero && penetration > fix.Zero && currentDeltaTime > fix.Zero)
+            {
+                fix biasVelocity = penetration * biasFactor / currentDeltaTime;
+                fix maxBiasVelocity = math.max(fix.Zero, settings.maxContactBiasVelocity);
+                if (maxBiasVelocity > fix.Zero)
+                {
+                    biasVelocity = math.min(biasVelocity, maxBiasVelocity);
+                }
+
+                targetVelocity = math.max(targetVelocity, biasVelocity);
+            }
+
+            return targetVelocity;
+        }
+
         private void ResolveContactFriction(
             ContactManifold manifold,
             ref ContactPoint point,
@@ -1592,29 +1630,39 @@ namespace Maphy.Physics
             fix3 relativeVelocity = velocity1 - velocity0;
             fix normalVelocity = math.dot(relativeVelocity, manifold.normal);
             fix3 tangentVelocity = relativeVelocity - manifold.normal * normalVelocity;
-            fix tangentSpeedSq = math.lengthsq(tangentVelocity);
-            if (tangentSpeedSq <= math.Epsilon)
-            {
-                return;
-            }
-
-            fix tangentSpeed = math.sqrt(tangentSpeedSq);
-            fix3 tangent = tangentVelocity / tangentSpeed;
-            if (math.lengthsq(point.tangent0) <= math.Epsilon || math.dot(point.tangent0, tangent) < fix._0_5)
+            BuildContactTangentBasis(manifold.normal, out fix3 tangent0, out fix3 tangent1);
+            if (math.lengthsq(point.tangent0) <= math.Epsilon
+                || math.dot(point.tangent0, tangent0) < fix._0_5
+                || math.dot(point.tangent1, tangent1) < fix._0_5)
             {
                 point.tangentImpulse0 = fix.Zero;
+                point.tangentImpulse1 = fix.Zero;
             }
 
-            point.tangent0 = tangent;
-            fix effectiveMass = inverseMass0 + inverseMass1
-                + SolverContext.GetAngularEffectiveMass(rigid0, r0, tangent)
-                + SolverContext.GetAngularEffectiveMass(rigid1, r1, tangent);
-            if (effectiveMass <= fix.Zero)
+            point.tangent0 = tangent0;
+            point.tangent1 = tangent1;
+
+            fix tangentVelocitySq = math.lengthsq(tangentVelocity);
+            if (tangentVelocitySq <= math.Epsilon
+                && math.abs(point.tangentImpulse0) <= math.Epsilon
+                && math.abs(point.tangentImpulse1) <= math.Epsilon)
             {
                 return;
             }
 
-            fix frictionDelta = -math.dot(relativeVelocity, tangent) / effectiveMass;
+            fix effectiveMass0 = inverseMass0 + inverseMass1
+                + SolverContext.GetAngularEffectiveMass(rigid0, r0, tangent0)
+                + SolverContext.GetAngularEffectiveMass(rigid1, r1, tangent0);
+            fix effectiveMass1 = inverseMass0 + inverseMass1
+                + SolverContext.GetAngularEffectiveMass(rigid0, r0, tangent1)
+                + SolverContext.GetAngularEffectiveMass(rigid1, r1, tangent1);
+            if (effectiveMass0 <= fix.Zero && effectiveMass1 <= fix.Zero)
+            {
+                return;
+            }
+
+            fix frictionDelta0 = effectiveMass0 > fix.Zero ? -math.dot(relativeVelocity, tangent0) / effectiveMass0 : fix.Zero;
+            fix frictionDelta1 = effectiveMass1 > fix.Zero ? -math.dot(relativeVelocity, tangent1) / effectiveMass1 : fix.Zero;
             fix maxFriction = point.normalImpulse * friction;
             fix maxFrictionImpulse = math.max(fix.Zero, settings.maxFrictionImpulse);
             if (maxFrictionImpulse > fix.Zero)
@@ -1622,12 +1670,46 @@ namespace Maphy.Physics
                 maxFriction = math.min(maxFriction, maxFrictionImpulse);
             }
 
-            fix previousTangentImpulse = point.tangentImpulse0;
-            point.tangentImpulse0 = math.clamp(previousTangentImpulse + frictionDelta, -maxFriction, maxFriction);
-            fix frictionMagnitude = point.tangentImpulse0 - previousTangentImpulse;
-            fix3 frictionImpulse = tangent * frictionMagnitude;
+            fix previousTangentImpulse0 = point.tangentImpulse0;
+            fix previousTangentImpulse1 = point.tangentImpulse1;
+            fix nextTangentImpulse0 = previousTangentImpulse0 + frictionDelta0;
+            fix nextTangentImpulse1 = previousTangentImpulse1 + frictionDelta1;
+            ClampFrictionCircle(ref nextTangentImpulse0, ref nextTangentImpulse1, maxFriction);
+
+            point.tangentImpulse0 = nextTangentImpulse0;
+            point.tangentImpulse1 = nextTangentImpulse1;
+            fix3 frictionImpulse = tangent0 * (nextTangentImpulse0 - previousTangentImpulse0)
+                + tangent1 * (nextTangentImpulse1 - previousTangentImpulse1);
 
             context.ApplyImpulse(hasRigid0, rigid0, inverseMass0, r0, hasRigid1, rigid1, inverseMass1, r1, frictionImpulse);
+        }
+
+        private static void BuildContactTangentBasis(fix3 normal, out fix3 tangent0, out fix3 tangent1)
+        {
+            fix3 reference = math.abs(normal.x) < fix._0_75 ? fix3.right : fix3.up;
+            tangent0 = PhysicsSafety.SafeNormalize(math.cross(reference, normal), fix3.forward);
+            tangent1 = PhysicsSafety.SafeNormalize(math.cross(normal, tangent0), fix3.up);
+        }
+
+        private static void ClampFrictionCircle(ref fix impulse0, ref fix impulse1, fix maxImpulse)
+        {
+            if (maxImpulse <= fix.Zero)
+            {
+                impulse0 = fix.Zero;
+                impulse1 = fix.Zero;
+                return;
+            }
+
+            fix magnitudeSq = impulse0 * impulse0 + impulse1 * impulse1;
+            fix maxSq = maxImpulse * maxImpulse;
+            if (magnitudeSq <= maxSq || magnitudeSq <= math.Epsilon)
+            {
+                return;
+            }
+
+            fix scale = maxImpulse / math.sqrt(magnitudeSq);
+            impulse0 *= scale;
+            impulse1 *= scale;
         }
 
         private fix GetCombinedRestitution(ContactManifold manifold)
@@ -1778,6 +1860,26 @@ namespace Maphy.Physics
             {
                 list.Capacity = capacity;
             }
+        }
+
+        private static void EnsureDictionaryCapacity<TKey, TValue>(Dictionary<TKey, TValue> dictionary, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                dictionary.EnsureCapacity(capacity);
+            }
+#endif
+        }
+
+        private static void EnsureHashSetCapacity<T>(HashSet<T> hashSet, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                hashSet.EnsureCapacity(capacity);
+            }
+#endif
         }
 
         private void BuildIslands()
@@ -2190,6 +2292,8 @@ namespace Maphy.Physics
             Hash(ref hash, worldSettings.maxRotationPerStep);
             Hash(ref hash, worldSettings.maxContactImpulse);
             Hash(ref hash, worldSettings.maxFrictionImpulse);
+            Hash(ref hash, worldSettings.contactVelocityBiasFactor);
+            Hash(ref hash, worldSettings.maxContactBiasVelocity);
             Hash(ref hash, worldSettings.solverIterations);
             Hash(ref hash, worldSettings.positionIterations);
             Hash(ref hash, worldSettings.enableSleeping);

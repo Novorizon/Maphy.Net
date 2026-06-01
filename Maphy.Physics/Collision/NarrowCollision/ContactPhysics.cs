@@ -4,6 +4,12 @@ namespace Maphy.Physics
 {
     public static partial class Physics
     {
+        [System.ThreadStatic]
+        private static fix3[] boxClipBuffer0;
+
+        [System.ThreadStatic]
+        private static fix3[] boxClipBuffer1;
+
         public static bool TryComputeContact(Shape shape0, Shape shape1, out CollisionInfo collision)
         {
             return TryComputeContact(shape0, shape1, NarrowPhaseAlgorithm.Auto, out collision);
@@ -257,8 +263,8 @@ namespace Maphy.Physics
             fix normalSign = math.dot(referenceAxis, normalFromReferenceToIncident) >= fix.Zero ? fix.One : -fix.One;
             fix3 normal = referenceAxis * normalSign;
             fix facePlane = math.dot(reference.center, normal) + reference.GetExtent(referenceAxisIndex);
-            fix3[] clipped = new fix3[8];
-            fix3[] scratch = new fix3[8];
+            fix3[] clipped = GetBoxClipBuffer0();
+            fix3[] scratch = GetBoxClipBuffer1();
             int clippedCount = GetIncidentFaceVertices(incident, normal, clipped);
 
             for (int axisIndex = 0; axisIndex < 3; axisIndex++)
@@ -336,6 +342,16 @@ namespace Maphy.Physics
             output[2] = faceCenter + edge0 + edge1;
             output[3] = faceCenter + edge0 - edge1;
             return 4;
+        }
+
+        private static fix3[] GetBoxClipBuffer0()
+        {
+            return boxClipBuffer0 ?? (boxClipBuffer0 = new fix3[8]);
+        }
+
+        private static fix3[] GetBoxClipBuffer1()
+        {
+            return boxClipBuffer1 ?? (boxClipBuffer1 = new fix3[8]);
         }
 
         private static int ClipPolygon(fix3[] polygon, fix3[] scratch, int count, fix3 planeNormal, fix planeOffset)

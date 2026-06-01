@@ -38,6 +38,28 @@ namespace Maphy.Physics
             }
         }
 
+        public static MassProperties ComputeMassProperties(PhysicsShapeData shape, fix density)
+        {
+            if (density <= fix.Zero)
+            {
+                return new MassProperties(fix.Zero, fix3.zero);
+            }
+
+            switch (shape.type)
+            {
+                case ShapeType.AABB:
+                    return ComputeBoxMassProperties(shape.aabb.size, density);
+                case ShapeType.OBB:
+                    return ComputeBoxMassProperties(shape.obb.size, density);
+                case ShapeType.Sphere:
+                    return ComputeSphereMassProperties(shape.sphere, density);
+                case ShapeType.Capsule:
+                    return ComputeCapsuleMassProperties(shape.capsule, density);
+                default:
+                    return new MassProperties(fix.Zero, fix3.zero);
+            }
+        }
+
         private static MassProperties ComputeBoxMassProperties(fix3 size, fix density)
         {
             fix width = math.abs(size.x);

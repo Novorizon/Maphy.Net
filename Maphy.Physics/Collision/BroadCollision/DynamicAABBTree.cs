@@ -27,6 +27,20 @@ namespace Maphy.Physics
         public int ProxyCount => proxyNodes.Count;
         public int Height => root == NullNode ? 0 : nodes[root].height;
 
+        public void Reserve(int proxyCapacity)
+        {
+            EnsureDictionaryCapacity(proxyNodes, proxyCapacity);
+            if (proxyCapacity > nodes.Capacity)
+            {
+                nodes.Capacity = proxyCapacity * 2;
+            }
+
+            if (proxyCapacity > queryStack.Capacity)
+            {
+                queryStack.Capacity = proxyCapacity;
+            }
+        }
+
         public int MaxBalance
         {
             get
@@ -583,6 +597,16 @@ namespace Maphy.Physics
                 && outerMax.x >= innerMax.x
                 && outerMax.y >= innerMax.y
                 && outerMax.z >= innerMax.z;
+        }
+
+        private static void EnsureDictionaryCapacity<TKey, TValue>(Dictionary<TKey, TValue> dictionary, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                dictionary.EnsureCapacity(capacity);
+            }
+#endif
         }
 
         private static fix SurfaceArea(AABB bounds)

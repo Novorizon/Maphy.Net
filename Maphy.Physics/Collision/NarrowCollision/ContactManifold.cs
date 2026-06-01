@@ -258,6 +258,21 @@ namespace Maphy.Physics
         public IReadOnlyList<ContactManifold> ActiveManifolds => activeManifolds;
         public int FrameIndex => frameIndex;
 
+        public void Reserve(int colliderCapacity)
+        {
+            int pairCapacity = colliderCapacity > 1 ? colliderCapacity * 2 : colliderCapacity;
+            EnsureDictionaryCapacity(manifoldsByKey, pairCapacity);
+            if (pairCapacity > activeManifolds.Capacity)
+            {
+                activeManifolds.Capacity = pairCapacity;
+            }
+
+            if (pairCapacity > staleKeys.Capacity)
+            {
+                staleKeys.Capacity = pairCapacity;
+            }
+        }
+
         public void Clear()
         {
             manifoldsByKey.Clear();
@@ -367,6 +382,16 @@ namespace Maphy.Physics
             {
                 manifoldsByKey.Remove(staleKeys[i]);
             }
+        }
+
+        private static void EnsureDictionaryCapacity<TKey, TValue>(Dictionary<TKey, TValue> dictionary, int capacity)
+        {
+#if NETCOREAPP2_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            if (capacity > 0)
+            {
+                dictionary.EnsureCapacity(capacity);
+            }
+#endif
         }
     }
 }

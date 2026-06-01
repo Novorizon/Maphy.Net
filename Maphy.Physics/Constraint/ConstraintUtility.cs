@@ -85,8 +85,7 @@ namespace Maphy.Physics
 
         public static fix3 NormalizeOrDefault(fix3 value, fix3 fallback)
         {
-            fix lengthSq = math.lengthsq(value);
-            return lengthSq > math.Epsilon ? value / math.sqrt(lengthSq) : fallback;
+            return PhysicsSafety.SafeNormalize(value, fallback);
         }
 
         private static void SolvePointVelocityAxis(SolverContext context, ConstraintAnchorData data, fix3 axis, ref fix3 accumulatedImpulse)

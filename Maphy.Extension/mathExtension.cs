@@ -3,8 +3,10 @@ using Maphy.Mathematics;
 using Maphy.Physics;
 using UnityEngine;
 using FixQuaternion = Maphy.Mathematics.quaternion;
+using MaphyRay = Maphy.Physics.Ray;
 using UnityBounds = UnityEngine.Bounds;
 using UnityQuaternion = UnityEngine.Quaternion;
+using UnityRay = UnityEngine.Ray;
 
 namespace Maphy.Unity
 {
@@ -104,6 +106,18 @@ namespace Maphy.Unity
         public static UnityBounds Bounds(AABB value)
         {
             return MaphyUnityConvert.ToBounds(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyRay Ray(UnityRay value)
+        {
+            return MaphyUnityConvert.ToRay(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static UnityRay Ray(MaphyRay value)
+        {
+            return MaphyUnityConvert.ToUnityRay(value);
         }
     }
 }

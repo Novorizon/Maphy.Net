@@ -8,6 +8,15 @@ namespace Maphy.Physics
 
         public IReadOnlyList<CollisionPair> CollisionPairs => collisionPairs;
 
+        public void Reserve(int colliderCapacity)
+        {
+            int pairCapacity = colliderCapacity > 1 ? colliderCapacity * 2 : colliderCapacity;
+            if (pairCapacity > collisionPairs.Capacity)
+            {
+                collisionPairs.Capacity = pairCapacity;
+            }
+        }
+
         public readonly struct CollisionPair
         {
             public readonly BroadCollisionPairKey key;

@@ -7,6 +7,14 @@ namespace Maphy.Physics
     {
         private const int GJKMaxIterations = 24;
         private const int EPAMaxIterations = 64;
+        private const int EPAMaxFaces = 128;
+        private const int EPAInitialCapacity = 32;
+
+        [System.ThreadStatic]
+        private static List<EPAFace> epaFacesBuffer;
+
+        [System.ThreadStatic]
+        private static List<EPADirectedEdge> epaHorizonBuffer;
 
         public static bool GJKOverlaps(Shape shape0, Shape shape1)
         {
@@ -27,12 +35,12 @@ namespace Maphy.Physics
 
             if (!TryBuildGJKSimplex(shape0, shape1, out GJKSimplex simplex))
             {
-                return false;
+                return TryComputeSATContact(shape0, shape1, out collision);
             }
 
             if (!TryEPA(shape0, shape1, simplex, out fix3 normal, out fix depth, out fix3 pointOnShape0, out fix3 pointOnShape1))
             {
-                return false;
+                return TryComputeSATContact(shape0, shape1, out collision);
             }
 
             collision = new CollisionInfo(0, 0)
@@ -156,7 +164,7 @@ namespace Maphy.Physics
                 return false;
             }
 
-            List<EPAFace> faces = new List<EPAFace>(16);
+            List<EPAFace> faces = GetEPAFacesBuffer();
             AddEPAFace(faces, simplex.a, simplex.b, simplex.c);
             AddEPAFace(faces, simplex.a, simplex.c, simplex.d);
             AddEPAFace(faces, simplex.a, simplex.d, simplex.b);
@@ -166,7 +174,7 @@ namespace Maphy.Physics
                 return false;
             }
 
-            List<EPADirectedEdge> horizon = new List<EPADirectedEdge>(16);
+            List<EPADirectedEdge> horizon = GetEPAHorizonBuffer();
             for (int iteration = 0; iteration < EPAMaxIterations; iteration++)
             {
                 int bestFaceIndex = FindClosestEPAFace(faces);
@@ -214,7 +222,10 @@ namespace Maphy.Physics
                 for (int edgeIndex = 0; edgeIndex < horizon.Count; edgeIndex++)
                 {
                     EPADirectedEdge edge = horizon[edgeIndex];
-                    AddEPAFace(faces, edge.start, edge.end, support);
+                    if (!AddEPAFace(faces, edge.start, edge.end, support))
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -245,13 +256,40 @@ namespace Maphy.Physics
             depth = math.max(fix.Zero, math.dot(delta, normal));
         }
 
-        private static void AddEPAFace(List<EPAFace> faces, GJKSupportPoint a, GJKSupportPoint b, GJKSupportPoint c)
+        private static List<EPAFace> GetEPAFacesBuffer()
         {
+            if (epaFacesBuffer == null)
+            {
+                epaFacesBuffer = new List<EPAFace>(EPAInitialCapacity);
+            }
+
+            epaFacesBuffer.Clear();
+            return epaFacesBuffer;
+        }
+
+        private static List<EPADirectedEdge> GetEPAHorizonBuffer()
+        {
+            if (epaHorizonBuffer == null)
+            {
+                epaHorizonBuffer = new List<EPADirectedEdge>(EPAInitialCapacity);
+            }
+
+            epaHorizonBuffer.Clear();
+            return epaHorizonBuffer;
+        }
+
+        private static bool AddEPAFace(List<EPAFace> faces, GJKSupportPoint a, GJKSupportPoint b, GJKSupportPoint c)
+        {
+            if (faces.Count >= EPAMaxFaces)
+            {
+                return false;
+            }
+
             fix3 normal = math.cross(b.point - a.point, c.point - a.point);
             fix normalLengthSq = math.lengthsq(normal);
             if (normalLengthSq <= math.Epsilon)
             {
-                return;
+                return false;
             }
 
             normal /= math.sqrt(normalLengthSq);
@@ -266,6 +304,7 @@ namespace Maphy.Physics
             }
 
             faces.Add(new EPAFace(a, b, c, normal, distance));
+            return true;
         }
 
         private static int FindClosestEPAFace(List<EPAFace> faces)

@@ -25,19 +25,19 @@ namespace Maphy.Physics
             Radius = radius;
             Height = height;
             Orientation = rotation;
-            Axis = rotation * axisOrigin;
+            Axis = PhysicsSafety.SafeNormalize(rotation * axisOrigin, fix3.up);
             this.axisOrigin = axisOrigin;
 
             Radius2 = radius * radius;
-            Center1 = center + math.normalize(Axis) * (height / 2 - radius);
-            Center2 = center - math.normalize(Axis) * (height / 2 - radius);
+            Center1 = center + Axis * (height / 2 - radius);
+            Center2 = center - Axis * (height / 2 - radius);
         }
 
         public void Update(fix3 center, quaternion rotation)
         {
             Center = center;
             Orientation = rotation;
-            Axis = math.normalize(rotation * axisOrigin);
+            Axis = PhysicsSafety.SafeNormalize(rotation * axisOrigin, fix3.up);
             Center1 = center + Axis * (Height / 2 - Radius);
             Center2 = center - Axis * (Height / 2 - Radius);
         }

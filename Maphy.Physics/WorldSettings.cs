@@ -20,6 +20,8 @@ namespace Maphy.Physics
         public fix maxRotationPerStep;
         public fix maxContactImpulse;
         public fix maxFrictionImpulse;
+        public fix contactVelocityBiasFactor;
+        public fix maxContactBiasVelocity;
         public int solverIterations;
         public int positionIterations;
         public bool enableSleeping;
@@ -62,6 +64,8 @@ namespace Maphy.Physics
             maxRotationPerStep = fix.Zero;
             maxContactImpulse = fix.Zero;
             maxFrictionImpulse = fix.Zero;
+            contactVelocityBiasFactor = fix.Zero;
+            maxContactBiasVelocity = fix.Zero;
             solverIterations = 1;
             positionIterations = 1;
             enableSleeping = true;

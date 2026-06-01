@@ -47,6 +47,38 @@ namespace Maphy.Physics
             return value * (maxMagnitude / math.sqrt(lengthSq));
         }
 
+        public static fix SafeSqrt(fix value)
+        {
+            value = Sanitize(value);
+            return value <= fix.Zero ? fix.Zero : math.sqrt(value);
+        }
+
+        public static fix SafeDiv(fix numerator, fix denominator, fix fallback = default)
+        {
+            numerator = Sanitize(numerator);
+            denominator = Sanitize(denominator);
+            if (math.abs(denominator) <= math.Epsilon)
+            {
+                return fallback;
+            }
+
+            fix result = numerator / denominator;
+            return IsFinite(result) ? result : fallback;
+        }
+
+        public static fix3 SafeNormalize(fix3 value, fix3 fallback)
+        {
+            value = Sanitize(value);
+            fix lengthSq = math.lengthsq(value);
+            if (lengthSq <= math.Epsilon || !IsFinite(lengthSq))
+            {
+                return fallback;
+            }
+
+            fix length = math.sqrt(lengthSq);
+            return length > math.Epsilon ? value / length : fallback;
+        }
+
         public static fix Clamp(fix value, fix min, fix max)
         {
             value = Sanitize(value);

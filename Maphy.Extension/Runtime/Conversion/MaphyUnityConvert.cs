@@ -3,8 +3,10 @@ using Maphy.Mathematics;
 using Maphy.Physics;
 using UnityEngine;
 using FixQuaternion = Maphy.Mathematics.quaternion;
+using MaphyRay = Maphy.Physics.Ray;
 using UnityBounds = UnityEngine.Bounds;
 using UnityQuaternion = UnityEngine.Quaternion;
+using UnityRay = UnityEngine.Ray;
 
 namespace Maphy.Unity
 {
@@ -163,6 +165,42 @@ namespace Maphy.Unity
         {
             return new UnityBounds(ToVector3(value.center), ToVector3(value.size));
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyRay ToRay(UnityRay value)
+        {
+            return new MaphyRay(ToFix3(value.origin), ToFix3(value.direction));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static UnityRay ToUnityRay(MaphyRay value)
+        {
+            return new UnityRay(ToVector3(value.origin), ToVector3(value.direction));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyUnityRaycastHit ToUnityRaycastHit(PhysicsWorldRaycastHit value)
+        {
+            return new MaphyUnityRaycastHit(
+                value.collider,
+                value.body,
+                ToFloat(value.distance),
+                ToVector3(value.point),
+                ToVector3(value.normal),
+                ToBounds(value.bounds));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyUnityShapeCastHit ToUnityShapeCastHit(PhysicsWorldShapeCastHit value)
+        {
+            return new MaphyUnityShapeCastHit(
+                value.collider,
+                value.body,
+                ToFloat(value.fraction),
+                ToVector3(value.point),
+                ToVector3(value.normal),
+                ToBounds(value.bounds));
+        }
     }
 
     public static class MaphyUnityConversionExtensions
@@ -250,5 +288,85 @@ namespace Maphy.Unity
         {
             return MaphyUnityConvert.ToBounds(value);
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyRay ToMaphyRay(this UnityRay value)
+        {
+            return MaphyUnityConvert.ToRay(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static UnityRay ToUnityRay(this MaphyRay value)
+        {
+            return MaphyUnityConvert.ToUnityRay(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyUnityRaycastHit ToUnityRaycastHit(this PhysicsWorldRaycastHit value)
+        {
+            return MaphyUnityConvert.ToUnityRaycastHit(value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static MaphyUnityShapeCastHit ToUnityShapeCastHit(this PhysicsWorldShapeCastHit value)
+        {
+            return MaphyUnityConvert.ToUnityShapeCastHit(value);
+        }
+    }
+
+    public readonly struct MaphyUnityRaycastHit
+    {
+        public readonly ColliderHandle collider;
+        public readonly BodyHandle body;
+        public readonly float distance;
+        public readonly Vector3 point;
+        public readonly Vector3 normal;
+        public readonly UnityBounds bounds;
+
+        public MaphyUnityRaycastHit(
+            ColliderHandle collider,
+            BodyHandle body,
+            float distance,
+            Vector3 point,
+            Vector3 normal,
+            UnityBounds bounds)
+        {
+            this.collider = collider;
+            this.body = body;
+            this.distance = distance;
+            this.point = point;
+            this.normal = normal;
+            this.bounds = bounds;
+        }
+
+        public bool IsValid => collider.IsValid;
+    }
+
+    public readonly struct MaphyUnityShapeCastHit
+    {
+        public readonly ColliderHandle collider;
+        public readonly BodyHandle body;
+        public readonly float fraction;
+        public readonly Vector3 point;
+        public readonly Vector3 normal;
+        public readonly UnityBounds bounds;
+
+        public MaphyUnityShapeCastHit(
+            ColliderHandle collider,
+            BodyHandle body,
+            float fraction,
+            Vector3 point,
+            Vector3 normal,
+            UnityBounds bounds)
+        {
+            this.collider = collider;
+            this.body = body;
+            this.fraction = fraction;
+            this.point = point;
+            this.normal = normal;
+            this.bounds = bounds;
+        }
+
+        public bool IsValid => collider.IsValid;
     }
 }

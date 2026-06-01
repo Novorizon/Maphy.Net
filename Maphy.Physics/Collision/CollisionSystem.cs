@@ -17,6 +17,13 @@ namespace Maphy.Physics
         public int BroadphaseTreeHeight => broadphase.TreeHeight;
         public int BroadphaseTreeMaxBalance => broadphase.TreeMaxBalance;
 
+        public void Reserve(int colliderCapacity)
+        {
+            broadphase.Reserve(colliderCapacity);
+            narrowphase.Reserve(colliderCapacity);
+            contactCache.Reserve(colliderCapacity);
+        }
+
         public void Collision(IEnumerable<Collider> colliders)
         {
             Collision(colliders, NarrowPhaseAlgorithm.Auto);
