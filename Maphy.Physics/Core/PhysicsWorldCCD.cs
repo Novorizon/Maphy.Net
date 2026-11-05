@@ -14,6 +14,7 @@ namespace Maphy.Physics
         private fix3 ccdEnvelopeMin, ccdEnvelopeMax;
         private fix ccdHorizon;
         private long ccdQueries, ccdCandidates, ccdShapeTests, ccdFallbackScans, ccdFallbackCandidates, ccdMovingColliders;
+        private long ccdProxiesCreated, ccdProxiesUpdated, ccdProxiesReused, ccdProxiesRemoved, ccdIndexRebuilds;
 
         /// <summary>Diagnostic/reference switch. Both paths must produce identical simulation state.</summary>
         public bool EnableCCDBroadphase { get; set; } = true;
@@ -62,16 +63,59 @@ namespace Maphy.Physics
         private void PrepareCCD(fix deltaTime)
         {
             ccdQueries = ccdCandidates = ccdShapeTests = ccdFallbackScans = ccdFallbackCandidates = ccdMovingColliders = 0;
+            ccdProxiesCreated = ccdProxiesUpdated = ccdProxiesReused = ccdProxiesRemoved = ccdIndexRebuilds = 0;
             ccdPrepared = settings.enableCCD && EnableCCDBroadphase && deltaTime > fix.Zero;
             ccdIndexOverflowed = false;
             ccdIndexUsable = ccdPrepared;
             ccdHasEnvelope = false;
             if (!ccdPrepared) return;
             ccdHorizon = deltaTime;
-            ccdTree.Clear();
+            ccdTree.ResetOverflow();
             for (int i = 0; i < bodyHighWaterMark; i++)
                 ccdTargetVelocities[i] = bodyAlive[i] ? GetCCDTargetVelocity(bodies[i].handle) : fix3.zero;
+            bool hadProxies = ccdTree.ProxyCount > 0;
+            // Remove stale versions and inactive leaves before refitting. Include
+            // retained fat bounds so every intermediate tree union is representable.
+            for (int i = 0; i < colliderHighWaterMark; i++)
+            {
+                if (!ccdTree.TryGetProxy(i, out ColliderHandle handle, out AABB _, out AABB fat)) continue;
+                if (!IsColliderActive(i) || colliders[i].isTrigger || handle != colliders[i].handle)
+                {
+                    ccdTree.RemoveProxy(handle);
+                    ccdProxiesRemoved++;
+                }
+                else if (!AccumulateCCDEnvelope(fat.min, fat.max))
+                {
+                    RebuildCCDIndex();
+                    hadProxies = false;
+                    break;
+                }
+            }
             for (int i = 0; i < colliderHighWaterMark; i++) UpdateCCDProxy(i);
+            if (!ccdIndexUsable && !ccdIndexOverflowed && hadProxies)
+            {
+                // A large teleport can make old+new bounds unrepresentable even
+                // though the current scene alone fits. Retry a clean index once.
+                RebuildCCDIndex();
+                for (int i = 0; i < colliderHighWaterMark; i++) UpdateCCDProxy(i);
+            }
+        }
+
+        private void RebuildCCDIndex()
+        {
+            ccdProxiesRemoved += ccdTree.ProxyCount;
+            ccdTree.Clear();
+            ccdIndexRebuilds++;
+            ccdHasEnvelope = false;
+            ccdIndexUsable = true;
+        }
+
+        private bool AccumulateCCDEnvelope(fix3 min, fix3 max)
+        {
+            if (ccdHasEnvelope) { min = math.min(min, ccdEnvelopeMin); max = math.max(max, ccdEnvelopeMax); }
+            if (!PhysicsSafety.IsFinite(min) || !PhysicsSafety.IsFinite(max) || !PhysicsSafety.IsFinite(max - min)) return false;
+            ccdEnvelopeMin = min; ccdEnvelopeMax = max; ccdHasEnvelope = true;
+            return true;
         }
 
         private void RefreshCCDBody(int index)
@@ -91,23 +135,30 @@ namespace Maphy.Physics
                 ccdIndexUsable = false;
                 return;
             }
+            bool existing = ccdTree.TryGetProxy(index, out ColliderHandle previous, out AABB tight, out AABB _)
+                && previous == collider.handle;
+            if (existing && tight.center == envelope.center && tight.extents == envelope.extents)
+            {
+                ccdProxiesReused++;
+                return;
+            }
             // Individually finite leaves can still produce an unrepresentable
             // internal tree union. Include fat margins and fall back before insert.
             fix3 padding = new fix3(fix._0_01);
             fix3 min = envelope.min - padding;
             fix3 max = envelope.max + padding;
-            if (ccdHasEnvelope) { min = math.min(min, ccdEnvelopeMin); max = math.max(max, ccdEnvelopeMax); }
-            if (!PhysicsSafety.IsFinite(min) || !PhysicsSafety.IsFinite(max) || !PhysicsSafety.IsFinite(max - min))
+            if (!AccumulateCCDEnvelope(min, max))
             {
                 ccdIndexUsable = false;
                 return;
             }
-            ccdEnvelopeMin = min; ccdEnvelopeMax = max; ccdHasEnvelope = true;
             if (!ccdTree.CreateProxy(collider.handle, envelope))
             {
                 ccdIndexUsable = false;
                 ccdIndexOverflowed = true;
             }
+            else if (existing) ccdProxiesUpdated++;
+            else ccdProxiesCreated++;
         }
 
         private static bool TryCCDSweptBounds(AABB bounds, fix3 delta, out AABB envelope)
@@ -191,7 +242,8 @@ namespace Maphy.Physics
         private void CaptureCCDStats()
         {
             LastCCDStats = new PhysicsWorldCCDStats(ccdQueries, ccdCandidates, ccdShapeTests, ccdFallbackScans,
-                ccdFallbackCandidates, ccdMovingColliders, ccdPrepared ? ccdTree.ProxyCount : 0, ccdIndexOverflowed);
+                ccdFallbackCandidates, ccdMovingColliders, ccdPrepared ? ccdTree.ProxyCount : 0, ccdIndexOverflowed,
+                ccdProxiesCreated, ccdProxiesUpdated, ccdProxiesReused, ccdProxiesRemoved, ccdIndexRebuilds);
         }
     }
 }

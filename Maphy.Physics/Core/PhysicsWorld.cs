@@ -61,6 +61,8 @@ namespace Maphy.Physics
         private int[] islandSleepingBodyCounts;
         private int[] islandRootToId;
         private int[] bodyIslandIds;
+        private int[] islandBodyHeads;
+        private int[] islandNextBody;
         private int islandCount;
         private int sleepingIslandCount;
         private PhysicsWorldStepStats lastStepStats;
@@ -94,6 +96,8 @@ namespace Maphy.Physics
             islandSleepingBodyCounts = Array.Empty<int>();
             islandRootToId = Array.Empty<int>();
             bodyIslandIds = Array.Empty<int>();
+            islandBodyHeads = Array.Empty<int>();
+            islandNextBody = Array.Empty<int>();
         }
 
         public PhysicsWorldSettings Settings
@@ -163,6 +167,8 @@ namespace Maphy.Physics
             EnsureCapacity(ref islandSleepingBodyCounts, bodies.Length);
             EnsureCapacity(ref islandRootToId, bodies.Length);
             EnsureCapacity(ref bodyIslandIds, bodies.Length);
+            EnsureCapacity(ref islandBodyHeads, bodies.Length);
+            EnsureCapacity(ref islandNextBody, bodies.Length);
             EnsureCapacity(ref colliders, math.max(colliderCapacity, colliderHighWaterMark));
             EnsureCapacity(ref colliderVersions, colliders.Length);
             EnsureCapacity(ref colliderAlive, colliders.Length);
@@ -774,17 +780,20 @@ namespace Maphy.Physics
             SolvePositions();
             long positionTicks = ProfileElapsed(ref stamp, profile);
             SanitizeBodies(deltaTime);
-            long finalizeTicks = ProfileElapsed(ref stamp, profile);
+            long sanitizationTicks = ProfileElapsed(ref stamp, profile);
             SyncDirtyColliders();
             SyncBroadphaseTree();
             syncTicks += ProfileElapsed(ref stamp, profile);
             UpdateSleeping(deltaTime);
+            long sleepTicks = ProfileElapsed(ref stamp, profile);
             SanitizeBodies(deltaTime);
-            finalizeTicks += ProfileElapsed(ref stamp, profile);
+            sanitizationTicks += ProfileElapsed(ref stamp, profile);
+            long finalizeTicks = sleepTicks + sanitizationTicks;
             UpdateStepStats();
             long statsTicks = ProfileElapsed(ref stamp, profile);
             LastStepProfile = profile ? new PhysicsWorldStepProfile(syncTicks, ccdPreparationTicks, integrationTicks, pairTicks,
-                contactTicks, islandTicks, velocityTicks, positionTicks, finalizeTicks, statsTicks, 1) : default;
+                contactTicks, islandTicks, velocityTicks, positionTicks, finalizeTicks, statsTicks, 1,
+                sleepTicks, sanitizationTicks) : default;
         }
 
         private static long ProfileElapsed(ref long stamp, bool enabled)
@@ -1716,6 +1725,8 @@ namespace Maphy.Physics
             for (int i = 0; i < bodyHighWaterMark; i++)
             {
                 bodyIslandIds[i] = -1;
+                islandBodyHeads[i] = -1;
+                islandNextBody[i] = -1;
                 islandRootToId[i] = -1;
                 islandBodyCounts[i] = 0;
                 islandSleepingBodyCounts[i] = 0;
@@ -1764,6 +1775,15 @@ namespace Maphy.Physics
                 {
                     islandSleepingBodyCounts[id]++;
                 }
+            }
+
+            // Prepending in reverse body order preserves ascending member order.
+            for (int i = bodyHighWaterMark - 1; i >= 0; i--)
+            {
+                int id = bodyIslandIds[i];
+                if (id < 0) continue;
+                islandNextBody[i] = islandBodyHeads[id];
+                islandBodyHeads[id] = i;
             }
 
             for (int i = 0; i < islandCount; i++)
@@ -1866,7 +1886,7 @@ namespace Maphy.Physics
                 }
 
                 bool shouldSleep = true;
-                for (int i = 0; i < bodyHighWaterMark; i++)
+                for (int i = islandBodyHeads[island]; i != -1; i = islandNextBody[i])
                 {
                     if (!bodyAlive[i] || bodyIslandIds[i] != island || !bodies[i].IsDynamic)
                     {
@@ -1894,7 +1914,7 @@ namespace Maphy.Physics
 
         private bool CanIslandSleep(int island)
         {
-            for (int i = 0; i < bodyHighWaterMark; i++)
+            for (int i = islandBodyHeads[island]; i != -1; i = islandNextBody[i])
             {
                 if (!bodyAlive[i] || bodyIslandIds[i] != island || !bodies[i].IsDynamic)
                 {
@@ -1925,7 +1945,7 @@ namespace Maphy.Physics
 
         private void SleepIsland(int island)
         {
-            for (int i = 0; i < bodyHighWaterMark; i++)
+            for (int i = islandBodyHeads[island]; i != -1; i = islandNextBody[i])
             {
                 if (!bodyAlive[i] || bodyIslandIds[i] != island)
                 {
@@ -1940,7 +1960,7 @@ namespace Maphy.Physics
 
         private void WakeIsland(int island)
         {
-            for (int i = 0; i < bodyHighWaterMark; i++)
+            for (int i = islandBodyHeads[island]; i != -1; i = islandNextBody[i])
             {
                 if (!bodyAlive[i] || bodyIslandIds[i] != island)
                 {

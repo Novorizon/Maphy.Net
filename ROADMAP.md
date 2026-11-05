@@ -38,6 +38,13 @@ and explicit numerical/index-overflow fallback. The paired sparse 1,000-mover
 measurement improves from 788.113 to 38.754 ms/update (20.34x), with unchanged
 state hashes and zero measured allocation. See Benchmarks/CCD.md for conditions
 and remaining index-preparation/finalization costs; this is not a Unity result.
+
+The next measured follow-up retains/refits CCD proxies and uses reserved island
+member lists for sleep/wake work. Its paired .NET 8 observation is 38.393 to
+15.094 ms/update for CCD and 5.794 to 1.655 ms/update for SleepingBodies, with
+unchanged hashes and zero measured allocation. See Benchmarks/CCD-reuse.md.
+Repeated whole-array dirty synchronization during CCD hits and dense contacts
+are the next performance targets; Unity execution remains pending.
 Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
 correctness and capability gates.
 

@@ -1,5 +1,9 @@
 # CCD candidate pruning and phase profiling
 
+This report records the first indexed version. See [CCD-reuse.md](CCD-reuse.md)
+for the subsequent retained-index and island-sleep optimization (38.393 to
+15.094 ms/update in its paired run).
+
 ## Reproducible paired observation
 
 The current full-scan reference and indexed backend were run sequentially on
@@ -71,11 +75,13 @@ capacity growth. Additional cases cover equal-fraction target ties, numerical
 fallback, no-allocation sparse pruning and profiling aggregation. The frozen
 1,239-row runtime corpus is unchanged.
 
-Reserve now allocates the secondary tree, collider chains and target-velocity
+That version allocates the secondary tree, collider chains and target-velocity
 cache up front. The capacity memory estimate includes them; for 2,000 reserved
 bodies/colliders it increases by approximately 736,000 bytes versus the previous
 estimate, with unchanged pair/manifold capacities. No allocation is deferred
 into CCD updates.
+The current version adds another 8 bytes per reserved body for island member
+lists; see CCD-reuse.md for the updated allocation contract.
 
 ## Optional phase timing
 
@@ -89,15 +95,16 @@ PhysicsWorldCCDStats ccd = world.LastCCDStats;
 Profiles cover synchronization, CCD preparation, integration, pair generation,
 contacts, island/wake processing, velocity solve, position solve, finalization,
 and step statistics. Ticks use `Stopwatch.Frequency`. `Step` sums all executed
-substeps; a zero-substep call clears its diagnostics. `Update` reports that
-single update. Disabled profiling performs no timestamp reads. Timers and CCD
+substeps. Positive fixed stepping clears diagnostics if it executes no update;
+disabled fixed stepping reports its direct Update, even for zero delta.
+`Update` reports that single update. Disabled profiling performs no timestamp reads. Timers and CCD
 counters never enter solver decisions or replay hashes.
 
 CCD counters sum the executed substeps, while proxyCount describes the last
 integration index. fallbackScans includes explicitly selecting the reference
 mode; indexOverflowed reports capacity/query overflow separately from numerical
-envelope fallback. A zero-substep Step reports zero counters rather than a stale
-previous update.
+envelope fallback. With positive fixed stepping, a Step executing no updates
+reports zero counters rather than a stale previous update.
 
 CSV phase `*Ms` columns are totals over measured iterations. Divide by Iterations
 for a per-update average. Integration includes hit-time synchronization; the

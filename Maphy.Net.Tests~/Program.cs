@@ -19,6 +19,9 @@ internal static class Program
         Run("CCD covers fast dynamic and kinematic targets", CCDAccelerationTests.FastTargetsAndTies);
         Run("CCD sparse pruning allocates no memory", CCDAccelerationTests.SparsePruning);
         Run("profiling aggregates substeps without changing replay", CCDAccelerationTests.ProfileAggregation);
+        Run("CCD proxy reuse follows lifecycle and reservation", CCDReuseTests.ProxyLifecycle);
+        Run("CCD retained envelopes survive horizon changes and large teleports", CCDReuseTests.MotionEnvelopeChanges);
+        Run("island member lists preserve sleep and wake lifecycle", CCDReuseTests.IslandSleepLifecycle);
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
         Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);

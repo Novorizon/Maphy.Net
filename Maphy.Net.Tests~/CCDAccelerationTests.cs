@@ -213,6 +213,10 @@ internal static class CCDAccelerationTests
         fast.EnableProfiling = false;
         fast.Step(dt);
         if (fast.LastStepProfile.TotalTicks != 0) throw new InvalidOperationException("disabled profiler retained timings");
+        fast.EnableProfiling = true;
+        fast.Step(fix.Zero, fix.Zero, 8);
+        if (fast.LastStepProfile.updateCount != 1)
+            throw new InvalidOperationException("disabled fixed stepping did not report its direct Update");
     }
 
     private static void Same(PhysicsWorld a, PhysicsWorld b, string context)

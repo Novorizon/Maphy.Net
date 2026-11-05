@@ -48,6 +48,8 @@ and [Benchmarks/README.md](Benchmarks/README.md) for allocation diagnosis and
 separate simulation/hash measurements.
 CCD acceleration, optional stage profiling, reference comparisons and memory
 costs are documented in [Benchmarks/CCD.md](Benchmarks/CCD.md).
+The retained-index and island-sleep follow-up is in
+[Benchmarks/CCD-reuse.md](Benchmarks/CCD-reuse.md).
 
 ## Core Build
 
