@@ -36,8 +36,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix2(long x, long y)
         {
-            this.x.value = x << fix.PRECISION;
-            this.y.value = y << fix.PRECISION;
+            this.x = new fix(x);
+            this.y = new fix(y);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -52,6 +52,13 @@ namespace Maphy.Mathematics
         {
             this.x = x;
             this.y = y;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public fix2(fix value)
+        {
+            x = value;
+            y = value;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -81,8 +88,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator +(fix2 a, fix2 b)
         {
-            a.x.value = a.x.value + b.x.value;
-            a.y.value = a.y.value + b.y.value;
+            a.x = a.x + b.x;
+            a.y = a.y + b.y;
 
             return a;
         }
@@ -90,8 +97,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator -(fix2 a, fix2 b)
         {
-            a.x.value = a.x.value - b.x.value;
-            a.y.value = a.y.value - b.y.value;
+            a.x = a.x - b.x;
+            a.y = a.y - b.y;
 
             return a;
         }
@@ -99,8 +106,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator -(fix2 a, fix b)
         {
-            a.x.value = a.x.value - b.value;
-            a.y.value = a.y.value - b.value;
+            a.x = a.x - b;
+            a.y = a.y - b;
 
             return a;
         }
@@ -108,8 +115,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator -(fix a, fix2 b)
         {
-            b.x.value = a.value - b.x.value;
-            b.y.value = a.value - b.y.value;
+            b.x = a - b.x;
+            b.y = a - b.y;
 
             return b;
         }
@@ -117,8 +124,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator -(fix2 a)
         {
-            a.x.value = -a.x.value;
-            a.y.value = -a.y.value;
+            a.x = -a.x;
+            a.y = -a.y;
 
             return a;
         }
@@ -126,8 +133,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator *(fix2 a, fix2 b)
         {
-            a.x.value = (a.x.value * b.x.value) >> fix.PRECISION;
-            a.y.value = (a.y.value * b.y.value) >> fix.PRECISION;
+            a.x = a.x * b.x;
+            a.y = a.y * b.y;
 
             return a;
         }
@@ -135,8 +142,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator *(fix2 a, fix b)
         {
-            a.x.value = (a.x.value * b.value) >> fix.PRECISION;
-            a.y.value = (a.y.value * b.value) >> fix.PRECISION;
+            a.x = a.x * b;
+            a.y = a.y * b;
 
             return a;
         }
@@ -144,8 +151,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator *(fix b, fix2 a)
         {
-            a.x.value = (a.x.value * b.value) >> fix.PRECISION;
-            a.y.value = (a.y.value * b.value) >> fix.PRECISION;
+            a.x = a.x * b;
+            a.y = a.y * b;
 
             return a;
         }
@@ -153,8 +160,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator /(fix2 a, fix2 b)
         {
-            a.x.value = (a.x.value << fix.PRECISION) / b.x.value;
-            a.y.value = (a.y.value << fix.PRECISION) / b.y.value;
+            a.x = a.x / b.x;
+            a.y = a.y / b.y;
 
             return a;
         }
@@ -162,8 +169,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator /(fix2 a, fix b)
         {
-            a.x.value = (a.x.value << fix.PRECISION) / b.value;
-            a.y.value = (a.y.value << fix.PRECISION) / b.value;
+            a.x = a.x / b;
+            a.y = a.y / b;
 
             return a;
         }
@@ -171,8 +178,8 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix2 operator /(fix b, fix2 a)
         {
-            a.x.value = (b.value << fix.PRECISION) / a.x.value;
-            a.y.value = (b.value << fix.PRECISION) / a.y.value;
+            a.x = b / a.x;
+            a.y = b / a.y;
 
             return a;
         }
@@ -243,3 +250,4 @@ namespace Maphy.Mathematics
         }
     }
 }
+

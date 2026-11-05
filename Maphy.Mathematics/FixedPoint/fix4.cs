@@ -65,10 +65,10 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal fix4(long x, long y, long z, long w)
         {
-            this.x.value = x << fix.PRECISION;
-            this.y.value = y << fix.PRECISION;
-            this.z.value = z << fix.PRECISION;
-            this.w.value = w << fix.PRECISION;
+            this.x = new fix(x);
+            this.y = new fix(y);
+            this.z = new fix(z);
+            this.w = new fix(w);
         }
 
 
@@ -79,6 +79,15 @@ namespace Maphy.Mathematics
             this.y.value = (long)(y * fix.ONE + 0.5f * (y < 0 ? -1 : 1));
             this.z.value = (long)(z * fix.ONE + 0.5f * (z < 0 ? -1 : 1));
             this.w.value = (long)(w * fix.ONE + 0.5f * (w < 0 ? -1 : 1));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public fix4(fix value)
+        {
+            x = value;
+            y = value;
+            z = value;
+            w = value;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -112,10 +121,10 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix4 operator *(fix4 lhs, fix4 rhs)
         {
-            lhs.x.value = (lhs.x.value * rhs.x.value) >> fix.PRECISION;
-            lhs.y.value = (lhs.y.value * rhs.y.value) >> fix.PRECISION;
-            lhs.z.value = (lhs.z.value * rhs.z.value) >> fix.PRECISION;
-            lhs.w.value = (lhs.w.value * rhs.w.value) >> fix.PRECISION;
+            lhs.x = lhs.x * rhs.x;
+            lhs.y = lhs.y * rhs.y;
+            lhs.z = lhs.z * rhs.z;
+            lhs.w = lhs.w * rhs.w;
             return lhs;
         }
 
@@ -249,3 +258,4 @@ namespace Maphy.Mathematics
         }
     }
 }
+

@@ -9,9 +9,14 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(MaphyForcePortable)' == 'true'">
+    <DefineConstants>$(DefineConstants);MAPHY_FORCE_PORTABLE</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="Maphy.Mathematics\**\*.cs" />
     <Compile Include="Maphy.Physics\**\*.cs" />
     <Compile Include="Maphy.Tree\**\*.cs" />
   </ItemGroup>
 </Project>
+

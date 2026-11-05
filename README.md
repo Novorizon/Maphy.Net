@@ -39,6 +39,9 @@ and finally a small physics world on top of it.
 See [ROADMAP.md](ROADMAP.md) for the planned module list and engineering cleanup
 order.
 
+See [NUMERICS.md](NUMERICS.md) for the fixed-point arithmetic, overflow, rounding,
+and portable-backend verification contract.
+
 ## Core Build
 
 The deterministic core can be checked outside Unity with:
@@ -181,3 +184,4 @@ dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -- --scen
 It prints CSV rows with elapsed time, allocated bytes, replay hash, active
 counts, dirty sync counts, broadphase/narrowphase counters, manifold reuse/drop
 counters, solver contact points, sleep counts, and overflow state.
+

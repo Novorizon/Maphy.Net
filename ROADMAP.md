@@ -4,6 +4,27 @@ This document defines the intended content of Maphy.Net and the engineering
 order for turning the current draft into a reliable deterministic math and
 physics library.
 
+## Execution plan (2026-11-05)
+
+The stages below define the next delivery order. The detailed inventory after
+this plan describes the target API, rather than a claim that every item is done.
+
+| Order | Deliverable | Exit criteria |
+| --- | --- | --- |
+| 1. Numeric repair | Consistent wide arithmetic, overflow/NaN handling, rounding, scalar-to-vector construction, and zero-vector angles. | Normal and portable backends pass the full test suite, independent numeric oracles, allocation checks, and matching corpus hashes. See NUMERICS.md. |
+| 2. Runtime determinism | Freeze raw input vectors and per-frame replay fingerprints for .NET, Unity Mono, and IL2CPP. Audit float/double/decimal ingress, NaN/infinity/range handling, sub-resolution constants, and remaining vector/matrix operations. | A documented runtime/version matrix passes the same raw-value corpus and at least 1,000 replay frames, including lifecycle changes and CCD. No determinism guarantee is published before these checks pass. |
+| 3. Physics capability contract | Document World versus PhysicsWorld support for shapes, queries, GJK/SAT, constraints, events, and Unity components. Resolve the ignored core narrowphase-algorithm parameter and consolidate shared code incrementally. | Every advertised capability has an integration test on its actual public entry point; unsupported combinations have explicit documented behavior. |
+| 4. Allocation and performance | Investigate StackSolver's observed allocation; warm contact paths and measure simulation and state hashing separately. Cover sparse/dense collision, CCD, sleeping, and capacity exhaustion. | Repeated warmed runs meet the documented allocation budget; publish reproducible results for 100 and 1,000 bodies with capacity and overflow state. Preserve correctness and replay fingerprints. |
+| 5. Supported preview package | Select a supported .NET LTS target and explicit Unity versions; add package metadata, examples, versioned releases, and compatibility notes. | A clean checkout builds/tests using supported SDKs, installs into the target Unity versions, and reproduces the example scenes. |
+
+Stage 1 is the current repair scope. Stages 2-5 are planned follow-up work.
+Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
+correctness and capability gates.
+
+The initial CI gate exercises normal and forced-portable arithmetic on .NET 9.
+Unity runtime jobs and a supported server target belong to the next stage;
+passing the arithmetic gate alone is not cross-platform certification.
+
 ## 1. Fixed-Point Mathematics
 
 ### 1.1 Scalar Core
@@ -319,3 +340,4 @@ Benchmark areas:
 9. Add rigid body integration.
 10. Add solver and callbacks.
 11. Split assemblies and move Unity adapters out of the core.
+

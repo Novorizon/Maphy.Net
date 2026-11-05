@@ -15,19 +15,20 @@ namespace Maphy.Mathematics
 
         /// Determine the signed angle between two vectors
         /// 两个向量之间的夹角，无符号 [0,180]
-        public static fix kEpsilon = fix._0_00001;
-        public static fix kEpsilonNormalSqrt = 1e-15F;
+        public static fix kEpsilon = fix.Raw(1);
+        public static fix kEpsilonNormalSqrt = fix.Raw(1);
         public static fix Angle(fix3 from, fix3 to)
         {
             fix denominator = math.sqrt(math.lengthsq(from) * math.lengthsq(to));
-            if (denominator < kEpsilonNormalSqrt)
-                return 0F;
+            if (fix.IsNaN(denominator))
+                return fix.NaN;
+            if (denominator <= math.max(fix.Zero, kEpsilonNormalSqrt))
+                return fix.Zero;
 
-            float dot = math.clamp(math.dot(from, to) / denominator, -fix._1, fix._1);
-            //fix dot = math.dot(v1, v2);
-            //if (dot == 0)
-            //    return 0;
-            return math.acos(dot) * math.Rad2Deg;
+            fix dot = math.dot(from, to) / denominator;
+            if (fix.IsNaN(dot))
+                return fix.NaN;
+            return math.acos(math.clamp(dot, -fix.One, fix.One)) * math.Rad2Deg;
         }
 
 
@@ -55,4 +56,5 @@ namespace Maphy.Mathematics
     }
 
 }
+
 

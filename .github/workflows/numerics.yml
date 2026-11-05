@@ -1,0 +1,30 @@
+name: Numeric consistency
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  arithmetic-backends:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Run full suite with Int128 arithmetic
+        shell: bash
+        run: dotnet run --project Maphy.Net.Tests~/Maphy.Net.Tests.csproj -c Release | tee "$RUNNER_TEMP/maphy-native.log"
+      - name: Run full suite with portable arithmetic
+        shell: bash
+        run: dotnet run --project Maphy.Net.Tests~/Maphy.Net.Tests.csproj -c Release -p:MaphyForcePortable=true | tee "$RUNNER_TEMP/maphy-portable.log"
+      - name: Compare deterministic corpus hashes
+        shell: bash
+        run: |
+          grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-native.log" > "$RUNNER_TEMP/maphy-native.hashes"
+          grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-portable.log" > "$RUNNER_TEMP/maphy-portable.hashes"
+          diff -u "$RUNNER_TEMP/maphy-native.hashes" "$RUNNER_TEMP/maphy-portable.hashes"
