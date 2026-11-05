@@ -31,6 +31,13 @@ lookup, separate simulation/hash measurement, dense-contact and repeated runs,
 and reproducible 100/1,000-object observations. See Benchmarks/README.md. This is
 an allocation and measurement gate, not a Unity frame-rate guarantee. Stage 5
 and full trigonometric/matrix accuracy audits remain follow-up work.
+
+CCD follow-up now supplies optional per-stage timings, a reserved target-motion
+tree, sorted body/collider ownership indexes, reference-scan differential tests,
+and explicit numerical/index-overflow fallback. The paired sparse 1,000-mover
+measurement improves from 788.113 to 38.754 ms/update (20.34x), with unchanged
+state hashes and zero measured allocation. See Benchmarks/CCD.md for conditions
+and remaining index-preparation/finalization costs; this is not a Unity result.
 Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
 correctness and capability gates.
 

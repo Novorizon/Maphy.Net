@@ -8,7 +8,7 @@ namespace Maphy.Physics
     /// independent from the object-friendly World class, so the two layers can be read
     /// side by side while the core gradually absorbs solver and narrowphase behavior.
     /// </summary>
-    public sealed class PhysicsWorld
+    public sealed partial class PhysicsWorld
     {
         public static PhysicsRuntimeCapabilities Capabilities => PhysicsRuntimeCapabilities.Core;
         private const ulong HashOffsetBasis = 14695981039346656037UL;
@@ -64,6 +64,8 @@ namespace Maphy.Physics
         private int islandCount;
         private int sleepingIslandCount;
         private PhysicsWorldStepStats lastStepStats;
+        public bool EnableProfiling { get; set; }
+        public PhysicsWorldStepProfile LastStepProfile { get; private set; }
 
         public PhysicsWorld()
             : this(PhysicsWorldSettings.Default)
@@ -173,6 +175,7 @@ namespace Maphy.Physics
 
             // Box/OBB contact clipping uses thread-local scratch arrays in Physics.
             // Warming them here keeps the first simulated box contact out of the GC path.
+            ReserveCCDStorage();
             Physics.ReserveContactScratch();
             // Rotation may begin after contact warmup; initialize LUTs while allocations are permitted.
             System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(trigonometric).TypeHandle);
@@ -191,6 +194,7 @@ namespace Maphy.Physics
             handle = new BodyHandle(index, version);
             bodyVersions[index] = version;
             bodyAlive[index] = true;
+            bodyColliderHeads[index] = -1;
             bodyDirty[index] = false;
             bodies[index] = new PhysicsWorldBody
             {
@@ -593,6 +597,7 @@ namespace Maphy.Physics
             }
 
             activeColliderCount++;
+            LinkBodyCollider(body.index, index);
             ApplyBodyMassProperties(body);
             ClearCollisionCaches();
             return true;
@@ -745,21 +750,50 @@ namespace Maphy.Physics
             }
 
             ResetSyncStats();
+            bool profile = EnableProfiling;
+            long stamp = profile ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
             SyncDirtyColliders();
+            long syncTicks = ProfileElapsed(ref stamp, profile);
+            PrepareCCD(deltaTime);
+            long ccdPreparationTicks = ProfileElapsed(ref stamp, profile);
             IntegrateBodies(deltaTime);
+            long integrationTicks = ProfileElapsed(ref stamp, profile);
+            CaptureCCDStats();
+            ccdPrepared = false;
             SyncDirtyColliders();
+            syncTicks += ProfileElapsed(ref stamp, profile);
             BuildPairs();
+            long pairTicks = ProfileElapsed(ref stamp, profile);
             BuildContacts();
+            long contactTicks = ProfileElapsed(ref stamp, profile);
             BuildIslands();
             WakeSleepingBodiesForActiveContacts();
+            long islandTicks = ProfileElapsed(ref stamp, profile);
             SolveVelocity(deltaTime);
+            long velocityTicks = ProfileElapsed(ref stamp, profile);
             SolvePositions();
+            long positionTicks = ProfileElapsed(ref stamp, profile);
             SanitizeBodies(deltaTime);
+            long finalizeTicks = ProfileElapsed(ref stamp, profile);
             SyncDirtyColliders();
             SyncBroadphaseTree();
+            syncTicks += ProfileElapsed(ref stamp, profile);
             UpdateSleeping(deltaTime);
             SanitizeBodies(deltaTime);
+            finalizeTicks += ProfileElapsed(ref stamp, profile);
             UpdateStepStats();
+            long statsTicks = ProfileElapsed(ref stamp, profile);
+            LastStepProfile = profile ? new PhysicsWorldStepProfile(syncTicks, ccdPreparationTicks, integrationTicks, pairTicks,
+                contactTicks, islandTicks, velocityTicks, positionTicks, finalizeTicks, statsTicks, 1) : default;
+        }
+
+        private static long ProfileElapsed(ref long stamp, bool enabled)
+        {
+            if (!enabled) return 0;
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            long elapsed = now - stamp;
+            stamp = now;
+            return elapsed;
         }
 
         public int Step(fix deltaTime)
@@ -783,10 +817,14 @@ namespace Maphy.Physics
 
             fixedTimeAccumulator += deltaTime;
             int subSteps = 0;
+            PhysicsWorldStepProfile totalProfile = default;
+            PhysicsWorldCCDStats totalCCD = default;
             while (fixedTimeAccumulator + math.Epsilon >= fixedTimeStep
                 && (maxSubSteps <= 0 || subSteps < maxSubSteps))
             {
                 Update(fixedTimeStep);
+                totalProfile += LastStepProfile;
+                totalCCD += LastCCDStats;
                 fixedTimeAccumulator -= fixedTimeStep;
                 if (fixedTimeAccumulator < fix.Zero)
                 {
@@ -797,6 +835,8 @@ namespace Maphy.Physics
                 subSteps++;
             }
 
+            LastStepProfile = totalProfile;
+            LastCCDStats = totalCCD;
             return subSteps;
         }
 
@@ -1105,6 +1145,7 @@ namespace Maphy.Physics
                 }
 
                 bodies[i] = body;
+                RefreshCCDBody(i);
                 if (body.position != originalPosition || body.rotation != originalRotation)
                 {
                     MarkBodyDirtyAt(i);
@@ -1188,78 +1229,9 @@ namespace Maphy.Physics
             return math.lengthsq(body.velocity) >= minVelocity * minVelocity;
         }
 
-        private bool TryComputeTimeOfImpact(
-            PhysicsWorldBody movingBody,
-            fix3 translationDelta,
-            fix deltaTime,
-            out ContinuousHit hit)
+        private bool TryComputeTimeOfImpact(PhysicsWorldBody movingBody, fix3 translationDelta, fix deltaTime, out ContinuousHit hit)
         {
-            hit = default;
-            bool found = false;
-            fix bestFraction = fix.One;
-            fix3 bestNormal = fix3.zero;
-            int bestColliderIndex = int.MaxValue;
-
-            for (int i = 0; i < colliderHighWaterMark; i++)
-            {
-                if (!IsColliderActive(i)
-                    || colliders[i].body != movingBody.handle
-                    || colliders[i].isTrigger)
-                {
-                    continue;
-                }
-
-                PhysicsWorldCollider movingCollider = colliders[i];
-                PhysicsShapeData movingShape = movingCollider.localShape.Transform(movingBody.position, movingBody.rotation);
-                AABB movingBounds = movingShape.ComputeBounds();
-
-                for (int j = 0; j < colliderHighWaterMark; j++)
-                {
-                    if (j == i
-                        || !IsColliderActive(j)
-                        || colliders[j].body == movingBody.handle
-                        || colliders[j].isTrigger
-                        || !CanCollide(movingCollider, colliders[j])
-                        || (!settings.enableDynamicCCD && IsAwakeDynamicBody(colliders[j].body)))
-                    {
-                        continue;
-                    }
-
-                    fix3 targetDelta = GetContinuousTargetDelta(colliders[j].body, deltaTime);
-                    fix3 relativeDelta = translationDelta - targetDelta;
-                    if (math.lengthsq(relativeDelta) <= math.Epsilon
-                        || !TryComputeColliderTimeOfImpact(
-                            movingShape,
-                            colliders[j].worldShape,
-                            movingBounds,
-                            colliders[j].bounds,
-                            relativeDelta,
-                            out fix fraction,
-                            out fix3 normal))
-                    {
-                        continue;
-                    }
-
-                    ColliderHandle targetHandle = colliders[j].handle;
-                    if (fraction > bestFraction || (fraction == bestFraction && targetHandle.Index >= bestColliderIndex))
-                    {
-                        continue;
-                    }
-
-                    found = true;
-                    bestFraction = fraction;
-                    bestNormal = normal;
-                    bestColliderIndex = targetHandle.Index;
-                }
-            }
-
-            if (!found)
-            {
-                return false;
-            }
-
-            hit = new ContinuousHit(bestFraction, bestNormal);
-            return true;
+            return FindCCDTimeOfImpact(movingBody, translationDelta, deltaTime, out hit);
         }
 
         private fix3 GetContinuousTargetDelta(BodyHandle targetBody, fix deltaTime)
@@ -1269,6 +1241,7 @@ namespace Maphy.Physics
                 return fix3.zero;
             }
 
+            if (ccdPrepared) return ccdTargetVelocities[targetBody.index] * deltaTime;
             PhysicsWorldBody body = bodies[targetBody.index];
             if (body.IsKinematic || (settings.enableDynamicCCD && body.IsAwakeDynamic))
             {
@@ -1322,13 +1295,8 @@ namespace Maphy.Physics
                 }
 
                 bodySyncCount++;
-                for (int j = 0; j < colliderHighWaterMark; j++)
-                {
-                    if (colliderAlive[j] && colliders[j].body.index == i)
-                    {
-                        colliderDirty[j] = true;
-                    }
-                }
+                for (int j = bodyColliderHeads[i]; j != -1; j = colliderNext[j])
+                    colliderDirty[j] = true;
             }
 
             for (int i = 0; i < colliderHighWaterMark; i++)
@@ -1363,6 +1331,11 @@ namespace Maphy.Physics
             collider.worldShape = collider.localShape.Transform(body.position, body.rotation);
             collider.bounds = collider.worldShape.ComputeBounds();
             colliders[index] = collider;
+            if (ccdPrepared)
+            {
+                ccdTargetVelocities[collider.body.index] = GetCCDTargetVelocity(collider.body);
+                UpdateCCDProxy(index);
+            }
         }
 
         private void BuildPairs()
@@ -2840,6 +2813,8 @@ namespace Maphy.Physics
 
         private void ClearCollisionCaches()
         {
+            ccdPrepared = false;
+            ccdIndexUsable = false;
             broadphaseTreeOverflowed = false;
             pairCount = 0;
             pairOverflowed = false;
@@ -2935,6 +2910,7 @@ namespace Maphy.Physics
         private void DestroyColliderAt(int index)
         {
             BodyHandle owner = colliders[index].body;
+            UnlinkBodyCollider(owner.index, index);
             broadphaseTree.RemoveProxy(colliders[index].handle);
             colliderAlive[index] = false;
             colliderDirty[index] = false;

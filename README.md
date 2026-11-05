@@ -46,6 +46,8 @@ Runtime gates and Unity 2022.3 player instructions are in [VALIDATION.md](VALIDA
 See [PHYSICS_CAPABILITIES.md](PHYSICS_CAPABILITIES.md) before choosing a world API,
 and [Benchmarks/README.md](Benchmarks/README.md) for allocation diagnosis and
 separate simulation/hash measurements.
+CCD acceleration, optional stage profiling, reference comparisons and memory
+costs are documented in [Benchmarks/CCD.md](Benchmarks/CCD.md).
 
 ## Core Build
 

@@ -15,6 +15,10 @@ internal static class Program
         Run("decimal ingress rejects overflow without throwing", RuntimeTests.DecimalIngress);
         Run("runtime capability contract rejects unsupported algorithms", RuntimeTests.CapabilityContract);
         Run("primitive contact entry points agree", RuntimeTests.ContactEntryPoints);
+        Run("CCD accelerated replay matches reference scan", CCDAccelerationTests.DifferentialReplay);
+        Run("CCD covers fast dynamic and kinematic targets", CCDAccelerationTests.FastTargetsAndTies);
+        Run("CCD sparse pruning allocates no memory", CCDAccelerationTests.SparsePruning);
+        Run("profiling aggregates substeps without changing replay", CCDAccelerationTests.ProfileAggregation);
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
         Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);

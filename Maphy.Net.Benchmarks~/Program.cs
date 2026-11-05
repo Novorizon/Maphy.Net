@@ -9,7 +9,9 @@ internal static class Program
 {
     private static int warmupIterations = 60;
     private static int repeatIndex = 1;
-    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow";
+    private static bool profileEnabled;
+    private static bool bruteForceCCD;
+    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow,ProfileEnabled,SyncMs,CCDPreparationMs,IntegrationMs,PairsMs,ContactsMs,IslandsMs,VelocitySolveMs,PositionSolveMs,FinalizeMs,StatsMs,CCDBroadphaseEnabled,CCDQueries,CCDCandidates,CCDShapeTests,CCDFallbackScans,CCDFallbackCandidates,CCDMovingColliders,CCDProxies,CCDIndexOverflow";
 
     private static int Main(string[] args)
     {
@@ -23,6 +25,8 @@ internal static class Program
         warmupIterations = ReadIntArg(args, "--warmup", 60);
         int repeats = ReadIntArg(args, "--repeat", 1);
         bool quick = HasArg(args, "--quick");
+        profileEnabled = HasArg(args, "--profile");
+        bruteForceCCD = HasArg(args, "--brute-force-ccd");
         int countOverride = ReadIntArg(args, "--count", -1);
         string scenarioFilter = ReadStringArg(args, "--scenario", "all");
         string outputPath = ReadStringArg(args, "--out", null);
@@ -251,6 +255,8 @@ internal static class Program
 
     private static void Measure(string name, int iterations, PhysicsWorld world, TextWriter output, Action step)
     {
+        world.EnableProfiling = profileEnabled;
+        world.EnableCCDBroadphase = !bruteForceCCD;
         for (int i = 0; i < warmupIterations; i++)
         {
             step();
@@ -260,6 +266,7 @@ internal static class Program
         long simulationTicks = 0, hashTicks = 0;
         long simulationAllocated = 0, hashAllocated = 0;
         ulong hash = 0;
+        PhysicsWorldStepProfile phases = default;
         for (int i = 0; i < iterations; i++)
         {
             long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
@@ -269,6 +276,7 @@ internal static class Program
             long allocatedAfterStep = GC.GetAllocatedBytesForCurrentThread();
             simulationTicks += afterStep - start;
             simulationAllocated += allocatedAfterStep - allocatedBefore;
+            phases += world.LastStepProfile;
 
             start = Stopwatch.GetTimestamp();
             hash = world.ComputeStateHash();
@@ -277,12 +285,15 @@ internal static class Program
         }
 
         PhysicsWorldStepStats stats = world.LastStepStats;
+        PhysicsWorldCCDStats ccd = world.LastCCDStats;
         double simulationMs = simulationTicks * 1000.0 / Stopwatch.Frequency;
         double hashMs = hashTicks * 1000.0 / Stopwatch.Frequency;
         output.WriteLine(FormattableString.Invariant(
-            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow}"));
+            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow},{profileEnabled},{Milliseconds(phases.syncTicks):F3},{Milliseconds(phases.ccdPreparationTicks):F3},{Milliseconds(phases.integrationTicks):F3},{Milliseconds(phases.pairTicks):F3},{Milliseconds(phases.contactTicks):F3},{Milliseconds(phases.islandTicks):F3},{Milliseconds(phases.velocityTicks):F3},{Milliseconds(phases.positionTicks):F3},{Milliseconds(phases.finalizeTicks):F3},{Milliseconds(phases.statsTicks):F3},{world.EnableCCDBroadphase},{ccd.queries},{ccd.candidates},{ccd.shapeTests},{ccd.fallbackScans},{ccd.fallbackCandidates},{ccd.movingColliders},{ccd.proxyCount},{ccd.indexOverflowed}"));
         output.Flush();
     }
+
+    private static double Milliseconds(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
     private static int CeilingSqrt(int value)
     {
@@ -363,6 +374,8 @@ internal static class Program
         output.WriteLine("  dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -- [options]");
         output.WriteLine("Options:");
         output.WriteLine("  --quick                  Use smaller default scenario sizes.");
+        output.WriteLine("  --brute-force-ccd       Use the CCD reference scan for comparison.");
+        output.WriteLine("  --profile               Record simulation-stage wall-clock timings.");
         output.WriteLine("  --warmup N              Warmup steps before measurement (default 60).");
         output.WriteLine("  --repeat N              Recreate and measure each scenario N times.");
         output.WriteLine("  --iterations N           Number of measured iterations per scenario.");

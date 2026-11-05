@@ -49,5 +49,12 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --quick --iterations 30 --repeat 2 --out "$RUNNER_TEMP/benchmarks.csv"
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --quick --iterations 30 --repeat 2 --profile --out "$RUNNER_TEMP/benchmarks.csv"
           python Tools/check_benchmarks.py "$RUNNER_TEMP/benchmarks.csv"
+      - name: Compare CCD reference and indexed candidate selection
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario CCD --count 100 --warmup 2 --iterations 3 --repeat 2 --profile --brute-force-ccd --out "$RUNNER_TEMP/ccd-reference.csv"
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario CCD --count 100 --warmup 2 --iterations 3 --repeat 2 --profile --out "$RUNNER_TEMP/ccd-indexed.csv"
+          python Tools/compare_ccd_benchmarks.py "$RUNNER_TEMP/ccd-reference.csv" "$RUNNER_TEMP/ccd-indexed.csv"

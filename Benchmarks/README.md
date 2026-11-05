@@ -1,5 +1,8 @@
 # Reproducible physics measurements
 
+The original dated 100/1,000-object CSVs below precede CCD candidate pruning.
+See [CCD.md](CCD.md) for the new indexed backend, phase timings and paired results.
+
 The CSV separates **simulation** time/allocation from **state hashing**. The old
 ElapsedMs field included both and should not be compared directly with the new
 simulation columns. Values use invariant culture; timings include timestamp and
@@ -62,7 +65,8 @@ All 24 observations have zero measured simulation/hash allocation, no overflow,
 and matching hashes between repeats. See the two dated CSVs for each sample and
 its contact/candidate counts. The 1,000-object CCD result remains a substantial
 bottleneck: core TOI selection scans collider targets for each moving collider.
-Swept broadphase candidate pruning is the next performance task; these results
-do not establish real-time viability for large CCD scenes. The unoptimized
+Subsequent swept candidate pruning and its measured limits are described in
+[CCD.md](CCD.md). These original results do not establish real-time viability.
+The unoptimized
 1,000-object full run was stopped after several minutes without a complete CSV;
 there is no valid before/after speedup ratio to report.
