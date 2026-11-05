@@ -43,8 +43,13 @@ The next measured follow-up retains/refits CCD proxies and uses reserved island
 member lists for sleep/wake work. Its paired .NET 8 observation is 38.393 to
 15.094 ms/update for CCD and 5.794 to 1.655 ms/update for SleepingBodies, with
 unchanged hashes and zero measured allocation. See Benchmarks/CCD-reuse.md.
-Repeated whole-array dirty synchronization during CCD hits and dense contacts
-are the next performance targets; Unity execution remains pending.
+The dirty synchronization follow-up replaces repeated whole-array hit flushes
+with reserved hierarchical bitsets, preserving global ascending update order.
+The pinned six-pair CCD median is 12.564 to 8.235 ms/update (1.53x); unpinned
+results show substantial scheduling variation and are retained for comparison.
+Both backends pass 145 test groups with unchanged frozen replay fingerprints.
+See Benchmarks/CCD-sync.md. Dense contacts and remaining CCD TOI/refit work are
+next; Unity execution remains pending.
 Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
 correctness and capability gates.
 

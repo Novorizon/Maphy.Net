@@ -50,8 +50,10 @@ namespace Maphy.Physics
         public PhysicsWorldMemoryBudget EstimateMemoryBudget()
         {
             PhysicsWorldCapacity normalized = Normalize();
-            long bodyBytes = EstimateArrayBytes(normalized.bodyCapacity, 292);
-            long colliderBytes = EstimateArrayBytes(normalized.colliderCapacity, 516);
+            long bodyBytes = EstimateArrayBytes(normalized.bodyCapacity, 291)
+                + PhysicsWorldDirtySet.EstimateBufferBytes(normalized.bodyCapacity);
+            long colliderBytes = EstimateArrayBytes(normalized.colliderCapacity, 515)
+                + PhysicsWorldDirtySet.EstimateBufferBytes(normalized.colliderCapacity);
             long broadphaseBytes = EstimateArrayBytes(SaturatingMultiply(normalized.colliderCapacity, 4), 160)
                 + EstimateArrayBytes(normalized.colliderCapacity, 32);
             long pairBytes = EstimateArrayBytes(normalized.pairCapacity, 160);

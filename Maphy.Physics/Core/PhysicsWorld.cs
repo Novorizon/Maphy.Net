@@ -18,14 +18,14 @@ namespace Maphy.Physics
         private PhysicsWorldBody[] bodies;
         private int[] bodyVersions;
         private bool[] bodyAlive;
-        private bool[] bodyDirty;
+        private readonly PhysicsWorldDirtySet bodyDirty = new PhysicsWorldDirtySet();
         private int bodyHighWaterMark;
         private int activeBodyCount;
 
         private PhysicsWorldCollider[] colliders;
         private int[] colliderVersions;
         private bool[] colliderAlive;
-        private bool[] colliderDirty;
+        private readonly PhysicsWorldDirtySet colliderDirty = new PhysicsWorldDirtySet();
         private bool[] colliderBroadphaseDirty;
         private int colliderHighWaterMark;
         private int activeColliderCount;
@@ -80,11 +80,9 @@ namespace Maphy.Physics
             bodies = Array.Empty<PhysicsWorldBody>();
             bodyVersions = Array.Empty<int>();
             bodyAlive = Array.Empty<bool>();
-            bodyDirty = Array.Empty<bool>();
             colliders = Array.Empty<PhysicsWorldCollider>();
             colliderVersions = Array.Empty<int>();
             colliderAlive = Array.Empty<bool>();
-            colliderDirty = Array.Empty<bool>();
             colliderBroadphaseDirty = Array.Empty<bool>();
             broadphaseTree = new PhysicsWorldAABBTree();
             pairs = Array.Empty<PhysicsWorldPair>();
@@ -160,7 +158,7 @@ namespace Maphy.Physics
             EnsureCapacity(ref bodies, math.max(bodyCapacity, bodyHighWaterMark));
             EnsureCapacity(ref bodyVersions, bodies.Length);
             EnsureCapacity(ref bodyAlive, bodies.Length);
-            EnsureCapacity(ref bodyDirty, bodies.Length);
+            bodyDirty.Reserve(bodies.Length);
             EnsureCapacity(ref islandParent, bodies.Length);
             EnsureCapacity(ref islandRank, bodies.Length);
             EnsureCapacity(ref islandBodyCounts, bodies.Length);
@@ -172,7 +170,7 @@ namespace Maphy.Physics
             EnsureCapacity(ref colliders, math.max(colliderCapacity, colliderHighWaterMark));
             EnsureCapacity(ref colliderVersions, colliders.Length);
             EnsureCapacity(ref colliderAlive, colliders.Length);
-            EnsureCapacity(ref colliderDirty, colliders.Length);
+            colliderDirty.Reserve(colliders.Length);
             EnsureCapacity(ref colliderBroadphaseDirty, colliders.Length);
             broadphaseTree.Reserve(colliders.Length);
             EnsureCapacity(ref pairs, math.max(pairCapacity, pairCount));
@@ -201,7 +199,7 @@ namespace Maphy.Physics
             bodyVersions[index] = version;
             bodyAlive[index] = true;
             bodyColliderHeads[index] = -1;
-            bodyDirty[index] = false;
+            bodyDirty.Remove(index);
             bodies[index] = new PhysicsWorldBody
             {
                 handle = handle,
@@ -240,7 +238,7 @@ namespace Maphy.Physics
 
             int index = handle.index;
             bodyAlive[index] = false;
-            bodyDirty[index] = false;
+            bodyDirty.Remove(index);
             bodyVersions[index] = NextVersion(bodyVersions[index]);
             bodies[index] = default;
             activeBodyCount--;
@@ -581,7 +579,7 @@ namespace Maphy.Physics
 
             colliderVersions[index] = version;
             colliderAlive[index] = true;
-            colliderDirty[index] = false;
+            colliderDirty.Remove(index);
             colliderBroadphaseDirty[index] = true;
             colliders[index] = new PhysicsWorldCollider
             {
@@ -1290,41 +1288,35 @@ namespace Maphy.Physics
 
         private void SyncDirtyColliders()
         {
-            for (int i = 0; i < bodyHighWaterMark; i++)
+            while (bodyDirty.TryTakeFirstWord(out int bodyStart, out ulong dirtyBodies))
             {
-                if (!bodyDirty[i])
+                while (dirtyBodies != 0)
                 {
-                    continue;
+                    int index = bodyStart + PhysicsWorldDirtySet.TakeFirstBit(ref dirtyBodies);
+                    if (!bodyAlive[index]) continue;
+                    bodySyncCount++;
+                    for (int j = bodyColliderHeads[index]; j != -1; j = colliderNext[j])
+                        colliderDirty.Add(j);
                 }
-
-                bodyDirty[i] = false;
-                if (!bodyAlive[i])
-                {
-                    continue;
-                }
-
-                bodySyncCount++;
-                for (int j = bodyColliderHeads[i]; j != -1; j = colliderNext[j])
-                    colliderDirty[j] = true;
             }
 
-            for (int i = 0; i < colliderHighWaterMark; i++)
+            // Collider order also determines CCD tree refits and numerical guards.
+            // Keep the original ascending order even for interleaved compounds.
+            while (colliderDirty.TryTakeFirstWord(out int colliderStart, out ulong dirtyColliders))
             {
-                if (!colliderDirty[i])
+                while (dirtyColliders != 0)
                 {
-                    continue;
-                }
+                    int index = colliderStart + PhysicsWorldDirtySet.TakeFirstBit(ref dirtyColliders);
+                    if (!colliderAlive[index])
+                    {
+                        colliderBroadphaseDirty[index] = false;
+                        continue;
+                    }
 
-                colliderDirty[i] = false;
-                if (!colliderAlive[i])
-                {
-                    colliderBroadphaseDirty[i] = false;
-                    continue;
+                    SyncColliderAt(index);
+                    colliderBroadphaseDirty[index] = true;
+                    colliderSyncCount++;
                 }
-
-                SyncColliderAt(i);
-                colliderBroadphaseDirty[i] = true;
-                colliderSyncCount++;
             }
         }
 
@@ -2618,17 +2610,14 @@ namespace Maphy.Physics
 
         private void MarkBodyDirty(BodyHandle handle)
         {
-            if (handle.index >= 0 && handle.index < bodyDirty.Length)
-            {
-                bodyDirty[handle.index] = true;
-            }
+            MarkBodyDirtyAt(handle.index);
         }
 
         private void MarkBodyDirtyAt(int index)
         {
-            if (index >= 0 && index < bodyDirty.Length)
+            if (index >= 0 && index < bodies.Length)
             {
-                bodyDirty[index] = true;
+                bodyDirty.Add(index);
             }
         }
 
@@ -2933,7 +2922,7 @@ namespace Maphy.Physics
             UnlinkBodyCollider(owner.index, index);
             broadphaseTree.RemoveProxy(colliders[index].handle);
             colliderAlive[index] = false;
-            colliderDirty[index] = false;
+            colliderDirty.Remove(index);
             colliderBroadphaseDirty[index] = false;
             colliderVersions[index] = NextVersion(colliderVersions[index]);
             colliders[index] = default;

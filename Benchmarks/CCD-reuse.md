@@ -90,7 +90,9 @@ changing motion horizons, large-teleport rebuild recovery, and 1,000 independent
 islands sleeping/waking with body deletion, reuse and type changes. The 1,239-row
 corpus and existing rolling replay hashes are unchanged.
 
-The next dominant target is repeated whole-array dirty synchronization inside CCD
-hit processing, followed by dense-contact generation/solving. More workloads and
+The subsequent [dirty synchronization follow-up](CCD-sync.md) removes the repeated
+whole-array scans inside CCD hit processing. Its independently paired pinned
+measurement is 12.564 to 8.235 ms/update; see that report for scheduling limits.
+Dense-contact generation/solving and remaining CCD TOI/refit work are next. More workloads and
 tail-latency measurements are needed before making frame-budget claims. Actual
 Unity 2022.3 Mono/IL2CPP execution still requires a licensed environment.

@@ -4,6 +4,8 @@ The original dated 100/1,000-object CSVs below precede CCD candidate pruning.
 See [CCD.md](CCD.md) for the new indexed backend, phase timings and paired results.
 The following [index-reuse report](CCD-reuse.md) records the next improvement to
 15.094 ms/update and the linear island-sleep path.
+The [dirty synchronization report](CCD-sync.md) records the next change, with a
+new same-host pinned pair of 12.564 to 8.235 ms/update and retained unpinned data.
 
 The CSV separates **simulation** time/allocation from **state hashing**. The old
 ElapsedMs field included both and should not be compared directly with the new
