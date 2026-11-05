@@ -10,9 +10,16 @@ permissions:
 
 jobs:
   arithmetic-backends:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
@@ -28,3 +35,19 @@ jobs:
           grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-native.log" > "$RUNNER_TEMP/maphy-native.hashes"
           grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-portable.log" > "$RUNNER_TEMP/maphy-portable.hashes"
           diff -u "$RUNNER_TEMP/maphy-native.hashes" "$RUNNER_TEMP/maphy-portable.hashes"
+      - name: Compare frozen cross-runtime corpus with Int128
+        shell: bash
+        run: |
+          dotnet run --project Validation~/Maphy.Validation.csproj -c Release -- --out "$RUNNER_TEMP/corpus-native.csv"
+          python Tools/compare_corpus.py Validation~/expected.csv "$RUNNER_TEMP/corpus-native.csv"
+      - name: Compare frozen cross-runtime corpus with portable arithmetic
+        shell: bash
+        run: |
+          dotnet run --project Validation~/Maphy.Validation.csproj -c Release -p:MaphyForcePortable=true -- --out "$RUNNER_TEMP/corpus-portable.csv"
+          python Tools/compare_corpus.py Validation~/expected.csv "$RUNNER_TEMP/corpus-portable.csv"
+      - name: Check repeated benchmark allocation and capacity
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --quick --iterations 30 --repeat 2 --out "$RUNNER_TEMP/benchmarks.csv"
+          python Tools/check_benchmarks.py "$RUNNER_TEMP/benchmarks.csv"

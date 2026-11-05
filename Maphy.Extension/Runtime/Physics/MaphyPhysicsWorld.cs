@@ -37,6 +37,7 @@ namespace Maphy.Unity
         private PhysicsWorld world;
 
         public PhysicsWorld World => EnsureWorld();
+        public PhysicsRuntimeCapabilities Capabilities => PhysicsWorld.Capabilities;
         public PhysicsWorldStepStats LastStepStats => EnsureWorld().LastStepStats;
         public PhysicsWorldCapacity Capacity => new PhysicsWorldCapacity(
             bodyCapacity,
@@ -317,3 +318,4 @@ namespace Maphy.Unity
         }
     }
 }
+

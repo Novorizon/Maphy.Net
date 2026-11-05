@@ -5,6 +5,7 @@ namespace Maphy.Physics
 {
     public class World
     {
+        public static PhysicsRuntimeCapabilities Capabilities => PhysicsRuntimeCapabilities.Objects;
         private const ulong HashOffsetBasis = 14695981039346656037UL;
         private const ulong HashPrime = 1099511628211UL;
 
@@ -3162,3 +3163,4 @@ namespace Maphy.Physics
         }
     }
 }
+

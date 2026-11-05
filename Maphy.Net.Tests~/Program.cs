@@ -10,6 +10,11 @@ internal static class Program
 
     private static void Main()
     {
+        Run("reserved first rotation does not allocate", RuntimeTests.ReservedFirstRotation);
+        Run("IEEE ingress matches exact rational arithmetic", RuntimeTests.BinaryIngress);
+        Run("decimal ingress rejects overflow without throwing", RuntimeTests.DecimalIngress);
+        Run("runtime capability contract rejects unsupported algorithms", RuntimeTests.CapabilityContract);
+        Run("primitive contact entry points agree", RuntimeTests.ContactEntryPoints);
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
         Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);

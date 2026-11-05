@@ -85,9 +85,9 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix3(float x)
         {
-            this.x.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.y.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.z.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
+            this.x = new fix(x);
+            this.y = new fix(x);
+            this.z = new fix(x);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

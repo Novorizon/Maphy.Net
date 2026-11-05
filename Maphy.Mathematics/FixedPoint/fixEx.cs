@@ -21,6 +21,7 @@ namespace Maphy.Mathematics
         public static readonly fix One = Raw(ONE);
         public static readonly fix Zero = Raw(0);
         public static readonly fix NaN = Raw(long.MinValue);
+        public static readonly fix Epsilon = Raw(1);
 
 
         public static readonly fix _0 = 0;
@@ -70,3 +71,4 @@ namespace Maphy.Mathematics
 
     }
 }
+

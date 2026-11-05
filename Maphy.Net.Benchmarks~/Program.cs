@@ -7,8 +7,9 @@ using Maphy.Physics;
 
 internal static class Program
 {
-    private const int WarmupIterations = 8;
-    private const string Header = "Name,Iterations,ElapsedMs,MicrosecondsPerIteration,AllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow";
+    private static int warmupIterations = 60;
+    private static int repeatIndex = 1;
+    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow";
 
     private static int Main(string[] args)
     {
@@ -19,6 +20,8 @@ internal static class Program
         }
 
         int iterations = ReadIntArg(args, "--iterations", 120);
+        warmupIterations = ReadIntArg(args, "--warmup", 60);
+        int repeats = ReadIntArg(args, "--repeat", 1);
         bool quick = HasArg(args, "--quick");
         int countOverride = ReadIntArg(args, "--count", -1);
         string scenarioFilter = ReadStringArg(args, "--scenario", "all");
@@ -43,46 +46,55 @@ internal static class Program
 
             output.WriteLine(Header);
 
-            if (ShouldRunScenario(scenarioFilter, "StaticQuery"))
+            for (repeatIndex = 1; repeatIndex <= repeats; repeatIndex++)
             {
-                if (countOverride > 0)
+                if (ShouldRunScenario(scenarioFilter, "StaticQuery"))
                 {
-                    RunStaticQuery(countOverride, iterations, output);
+                    if (countOverride > 0)
+                    {
+                        RunStaticQuery(countOverride, iterations, output);
+                    }
+                    else
+                    {
+                        RunStaticQuery(quick ? 100 : 100, iterations, output);
+                        RunStaticQuery(quick ? 200 : 500, iterations, output);
+                        RunStaticQuery(quick ? 300 : 1000, iterations, output);
+                    }
                 }
-                else
+
+                if (ShouldRunScenario(scenarioFilter, "DynamicBroadphase"))
                 {
-                    RunStaticQuery(quick ? 100 : 100, iterations, output);
-                    RunStaticQuery(quick ? 200 : 500, iterations, output);
-                    RunStaticQuery(quick ? 300 : 1000, iterations, output);
+                    if (countOverride > 0)
+                    {
+                        RunDynamicBroadphase(countOverride, iterations, output);
+                    }
+                    else
+                    {
+                        RunDynamicBroadphase(quick ? 100 : 100, iterations, output);
+                        RunDynamicBroadphase(quick ? 200 : 500, iterations, output);
+                    }
                 }
-            }
 
-            if (ShouldRunScenario(scenarioFilter, "DynamicBroadphase"))
-            {
-                if (countOverride > 0)
+                if (ShouldRunScenario(scenarioFilter, "StackSolver"))
                 {
-                    RunDynamicBroadphase(countOverride, iterations, output);
+                    RunStackSolver(countOverride > 0 ? countOverride : quick ? 16 : 48, iterations, output);
                 }
-                else
+
+                if (ShouldRunScenario(scenarioFilter, "SleepingBodies"))
                 {
-                    RunDynamicBroadphase(quick ? 100 : 100, iterations, output);
-                    RunDynamicBroadphase(quick ? 200 : 500, iterations, output);
+                    RunSleepingBodies(countOverride > 0 ? countOverride : quick ? 100 : 500, iterations, output);
                 }
-            }
 
-            if (ShouldRunScenario(scenarioFilter, "StackSolver"))
-            {
-                RunStackSolver(countOverride > 0 ? countOverride : quick ? 16 : 48, iterations, output);
-            }
+                if (ShouldRunScenario(scenarioFilter, "CCD"))
+                {
+                    RunCCD(countOverride > 0 ? countOverride : quick ? 16 : 64, iterations, output);
+                }
 
-            if (ShouldRunScenario(scenarioFilter, "SleepingBodies"))
-            {
-                RunSleepingBodies(countOverride > 0 ? countOverride : quick ? 100 : 500, iterations, output);
-            }
+                if (ShouldRunScenario(scenarioFilter, "DenseContacts"))
+                {
+                    RunDenseContacts(countOverride > 0 ? countOverride : quick ? 100 : 1000, iterations, output);
+                }
 
-            if (ShouldRunScenario(scenarioFilter, "CCD"))
-            {
-                RunCCD(countOverride > 0 ? countOverride : quick ? 16 : 64, iterations, output);
             }
 
             output.Flush();
@@ -219,29 +231,57 @@ internal static class Program
         });
     }
 
+    private static void RunDenseContacts(int count, int iterations, TextWriter output)
+    {
+        var settings = new PhysicsWorldSettings(false);
+        settings.enableSleeping = false;
+        var world = new PhysicsWorld(settings);
+        world.Reserve(count, count, count * 32, count * 32);
+        int side = 1;
+        while (side * side * side < count) side++;
+        fix spacing = (fix)0.9m;
+        for (int i = 0; i < count; i++)
+        {
+            fix3 position = new fix3((i % side) * spacing, ((i / side) % side) * spacing, (i / (side * side)) * spacing);
+            Require(world.CreateBody(position, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "dense body");
+            Require(world.AddAABB(body, fix3.zero, new fix3(1), out _), "dense collider");
+        }
+        Measure($"DenseContacts/{count}", iterations, world, output, () => world.Step(fix.One / 60));
+    }
+
     private static void Measure(string name, int iterations, PhysicsWorld world, TextWriter output, Action step)
     {
-        for (int i = 0; i < WarmupIterations; i++)
+        for (int i = 0; i < warmupIterations; i++)
         {
             step();
+            world.ComputeStateHash();
         }
 
-        long beforeAlloc = GC.GetAllocatedBytesForCurrentThread();
-        long startTimestamp = Stopwatch.GetTimestamp();
+        long simulationTicks = 0, hashTicks = 0;
+        long simulationAllocated = 0, hashAllocated = 0;
         ulong hash = 0;
         for (int i = 0; i < iterations; i++)
         {
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            long start = Stopwatch.GetTimestamp();
             step();
+            long afterStep = Stopwatch.GetTimestamp();
+            long allocatedAfterStep = GC.GetAllocatedBytesForCurrentThread();
+            simulationTicks += afterStep - start;
+            simulationAllocated += allocatedAfterStep - allocatedBefore;
+
+            start = Stopwatch.GetTimestamp();
             hash = world.ComputeStateHash();
+            hashTicks += Stopwatch.GetTimestamp() - start;
+            hashAllocated += GC.GetAllocatedBytesForCurrentThread() - allocatedAfterStep;
         }
 
-        long endTimestamp = Stopwatch.GetTimestamp();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAlloc;
         PhysicsWorldStepStats stats = world.LastStepStats;
-        double elapsedMs = (endTimestamp - startTimestamp) * 1000.0 / Stopwatch.Frequency;
-        double microseconds = elapsedMs * 1000.0 / Math.Max(1, iterations);
-        output.WriteLine(
-            $"{name},{iterations},{elapsedMs:F3},{microseconds:F3},{allocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow}");
+        double simulationMs = simulationTicks * 1000.0 / Stopwatch.Frequency;
+        double hashMs = hashTicks * 1000.0 / Stopwatch.Frequency;
+        output.WriteLine(FormattableString.Invariant(
+            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow}"));
+        output.Flush();
     }
 
     private static int CeilingSqrt(int value)
@@ -323,8 +363,10 @@ internal static class Program
         output.WriteLine("  dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -- [options]");
         output.WriteLine("Options:");
         output.WriteLine("  --quick                  Use smaller default scenario sizes.");
+        output.WriteLine("  --warmup N              Warmup steps before measurement (default 60).");
+        output.WriteLine("  --repeat N              Recreate and measure each scenario N times.");
         output.WriteLine("  --iterations N           Number of measured iterations per scenario.");
-        output.WriteLine("  --scenario A,B           Run selected scenarios: StaticQuery, DynamicBroadphase, StackSolver, SleepingBodies, CCD.");
+        output.WriteLine("  --scenario A,B           Run selected scenarios: StaticQuery, DynamicBroadphase, StackSolver, SleepingBodies, CCD, DenseContacts.");
         output.WriteLine("  --count N                Override scenario object count.");
         output.WriteLine("  --out path.csv           Write CSV output to a file.");
     }
@@ -337,3 +379,4 @@ internal static class Program
         }
     }
 }
+

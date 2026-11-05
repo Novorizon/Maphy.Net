@@ -17,6 +17,7 @@ namespace Maphy.Physics
 
         public static bool TryComputeContact(Shape shape0, Shape shape1, NarrowPhaseAlgorithm algorithm, out CollisionInfo collision)
         {
+            PhysicsRuntimeCapabilities.Objects.EnsureAlgorithm(algorithm);
             switch (algorithm)
             {
                 case NarrowPhaseAlgorithm.GJK:
@@ -1095,3 +1096,4 @@ namespace Maphy.Physics
         }
     }
 }
+

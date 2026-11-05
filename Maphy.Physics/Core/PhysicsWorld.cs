@@ -10,6 +10,7 @@ namespace Maphy.Physics
     /// </summary>
     public sealed class PhysicsWorld
     {
+        public static PhysicsRuntimeCapabilities Capabilities => PhysicsRuntimeCapabilities.Core;
         private const ulong HashOffsetBasis = 14695981039346656037UL;
         private const ulong HashPrime = 1099511628211UL;
 
@@ -173,6 +174,8 @@ namespace Maphy.Physics
             // Box/OBB contact clipping uses thread-local scratch arrays in Physics.
             // Warming them here keeps the first simulated box contact out of the GC path.
             Physics.ReserveContactScratch();
+            // Rotation may begin after contact warmup; initialize LUTs while allocations are permitted.
+            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(trigonometric).TypeHandle);
         }
 
         public bool CreateBody(fix3 position, quaternion rotation, RigidType type, out BodyHandle handle)
@@ -2514,14 +2517,24 @@ namespace Maphy.Physics
 
         private bool TryFindPreviousManifold(PhysicsWorldPair pair, out PhysicsWorldManifold manifold)
         {
-            for (int i = 0; i < contactManifoldCount; i++)
+            // BuildContacts preserves sorted pair order; lifecycle changes clear
+            // the cache. Search keys without copying every large manifold.
+            int low = 0;
+            int high = contactManifoldCount - 1;
+            while (low <= high)
             {
-                PhysicsWorldManifold candidate = manifolds[i];
-                if (candidate.collider0 == pair.collider0 && candidate.collider1 == pair.collider1)
+                int middle = low + ((high - low) >> 1);
+                ref PhysicsWorldManifold candidate = ref manifolds[middle];
+                int order = candidate.collider0.Index.CompareTo(pair.collider0.Index);
+                if (order == 0) order = candidate.collider1.Index.CompareTo(pair.collider1.Index);
+                if (order < 0) low = middle + 1;
+                else if (order > 0) high = middle - 1;
+                else if (candidate.collider0 == pair.collider0 && candidate.collider1 == pair.collider1)
                 {
                     manifold = candidate;
                     return true;
                 }
+                else break;
             }
 
             manifold = default;
@@ -3025,6 +3038,7 @@ namespace Maphy.Physics
 
         private static PhysicsWorldSettings NormalizeSettings(PhysicsWorldSettings value)
         {
+            PhysicsRuntimeCapabilities.Core.EnsureAlgorithm(value.narrowPhaseAlgorithm);
             if (value.timeStep <= fix.Zero)
             {
                 value.timeStep = fix.One / 60;
@@ -3240,3 +3254,4 @@ namespace Maphy.Physics
         }
     }
 }
+

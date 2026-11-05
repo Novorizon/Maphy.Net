@@ -42,6 +42,22 @@ point or `BigInteger` in the runtime library.
 These policies are explicit API choices. In particular, callers should not assume
 Unity.Mathematics' midpoint or fractional-part conventions.
 
+## Input conversion
+
+`float` conversion rounds the exact IEEE-754 input to the nearest raw unit, with
+ties away from zero. `double` and `decimal` retain the existing truncation-toward-
+zero policy. Binary conversion decodes sign, exponent, and significand instead
+of depending on an out-of-range floating-to-integer cast. NaN, infinity, and
+unrepresentable inputs return `fix.NaN`; signed zero and subnormal inputs below
+resolution become zero. Decimal extremes return NaN without overflowing decimal
+scaling first. Float vector constructors use the same scalar conversion.
+
+`fix.Epsilon` is the smallest positive value (raw 1). The legacy `_0_00001`
+constant is below Q16 resolution and equals zero; do not use it as a positive
+tolerance. Integer source values or explicit raw bits are preferred for replay
+inputs. Conversion boundaries should be crossed once when authoring inputs,
+rather than injecting runtime floating-point calculations into simulation.
+
 `Geometry.Angle` keeps its intermediate values in fixed point. A zero or
 below-resolution denominator returns zero; an invalid denominator or dot product
 returns NaN. Its epsilon is one representable raw unit.
@@ -66,6 +82,6 @@ Compare the printed corpus hashes as well as the test exit codes. CI runs both
 backends and checks their hashes.
 
 This verifies backend agreement on .NET. It does not certify Unity Mono or
-IL2CPP execution. Floating-point conversions, remaining vector/matrix APIs,
-trigonometric accuracy, and cross-platform physics replay still need the next
-validation stages in [ROADMAP.md](ROADMAP.md).
+IL2CPP execution. See [VALIDATION.md](VALIDATION.md) for the frozen input/replay
+corpus and Unity 2022.3 player workflow. Exhaustive vector/matrix parity and
+trigonometric approximation accuracy remain separate validation work.

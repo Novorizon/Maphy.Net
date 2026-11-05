@@ -17,13 +17,26 @@ this plan describes the target API, rather than a claim that every item is done.
 | 4. Allocation and performance | Investigate StackSolver's observed allocation; warm contact paths and measure simulation and state hashing separately. Cover sparse/dense collision, CCD, sleeping, and capacity exhaustion. | Repeated warmed runs meet the documented allocation budget; publish reproducible results for 100 and 1,000 bodies with capacity and overflow state. Preserve correctness and replay fingerprints. |
 | 5. Supported preview package | Select a supported .NET LTS target and explicit Unity versions; add package metadata, examples, versioned releases, and compatibility notes. | A clean checkout builds/tests using supported SDKs, installs into the target Unity versions, and reproduces the example scenes. |
 
-Stage 1 is the current repair scope. Stages 2-5 are planned follow-up work.
+Stage 1 is implemented. The follow-up now supplies exact input-conversion tests,
+a frozen 1,000-frame corpus, Linux/Windows/macOS backend gates, and a Unity 2022.3
+player builder. Actual Mono/IL2CPP execution still needs a licensed runner; stage
+2 is not certified complete. See VALIDATION.md for observed evidence and limits.
+
+Stage 3's capability contract is implemented in PHYSICS_CAPABILITIES.md and
+PhysicsRuntimeCapabilities. Unsupported core GJK selection is rejected explicitly;
+object joints/events remain intentionally outside the reserved core.
+
+Stage 4 now includes the lazy-LUT allocation fix, logarithmic persistent-manifold
+lookup, separate simulation/hash measurement, dense-contact and repeated runs,
+and reproducible 100/1,000-object observations. See Benchmarks/README.md. This is
+an allocation and measurement gate, not a Unity frame-rate guarantee. Stage 5
+and full trigonometric/matrix accuracy audits remain follow-up work.
 Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
 correctness and capability gates.
 
-The initial CI gate exercises normal and forced-portable arithmetic on .NET 9.
-Unity runtime jobs and a supported server target belong to the next stage;
-passing the arithmetic gate alone is not cross-platform certification.
+CI exercises normal and forced-portable arithmetic on .NET 9 across three
+operating systems. The Unity workflow is manual and requires a configured,
+licensed self-hosted runner; passing .NET jobs is not Unity certification.
 
 ## 1. Fixed-Point Mathematics
 

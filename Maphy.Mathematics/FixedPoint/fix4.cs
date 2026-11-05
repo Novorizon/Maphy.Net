@@ -75,10 +75,10 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix4(float x, float y, float z, float w)
         {
-            this.x.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.y.value = (long)(y * fix.ONE + 0.5f * (y < 0 ? -1 : 1));
-            this.z.value = (long)(z * fix.ONE + 0.5f * (z < 0 ? -1 : 1));
-            this.w.value = (long)(w * fix.ONE + 0.5f * (w < 0 ? -1 : 1));
+            this.x = new fix(x);
+            this.y = new fix(y);
+            this.z = new fix(z);
+            this.w = new fix(w);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -102,10 +102,10 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix4(float x)
         {
-            this.x.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.y.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.z.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.w.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
+            this.x = new fix(x);
+            this.y = new fix(x);
+            this.z = new fix(x);
+            this.w = new fix(x);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

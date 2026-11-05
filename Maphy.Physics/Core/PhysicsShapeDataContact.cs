@@ -16,9 +16,7 @@ namespace Maphy.Physics
             NarrowPhaseAlgorithm algorithm,
             out CollisionInfo collision)
         {
-            // The no-GC core currently uses the SAT/contact implementation for every
-            // algorithm mode. A no-GC GJK/EPA path can slot in here without changing
-            // PhysicsWorld storage or solver code.
+            PhysicsRuntimeCapabilities.Core.EnsureAlgorithm(algorithm);
             return TryComputePhysicsShapeSATContact(shape0, shape1, out collision);
         }
 
@@ -99,3 +97,4 @@ namespace Maphy.Physics
         }
     }
 }
+

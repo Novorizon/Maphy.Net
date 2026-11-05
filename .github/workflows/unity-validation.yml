@@ -1,0 +1,46 @@
+name: Unity 2022.3 runtime validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      editor_path:
+        description: Path to the licensed Unity 2022.3 Editor on the runner
+        required: true
+      unity_version:
+        description: Exact installed version, for example 2022.3.62f1
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  players:
+    runs-on: [self-hosted, linux, unity-2022.3]
+    timeout-minutes: 45
+    env:
+      UNITY_EDITOR: ${{ inputs.editor_path }}
+      UNITY_VERSION: ${{ inputs.unity_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated validation project
+        shell: bash
+        run: |
+          test -x "$UNITY_EDITOR"
+          python3 Tools/prepare_unity_validation.py --output "$RUNNER_TEMP/maphy-unity-$GITHUB_RUN_ID" --unity-version "$UNITY_VERSION"
+      - name: Build and compare real Mono and IL2CPP players
+        shell: bash
+        run: |
+          project="$RUNNER_TEMP/maphy-unity-$GITHUB_RUN_ID"
+          for backend in Mono IL2CPP; do
+            "$UNITY_EDITOR" -batchmode -nographics -quit -projectPath "$project" -executeMethod "MaphyValidationBuild.$backend" -logFile "$RUNNER_TEMP/editor-$backend.log" --build-output "$RUNNER_TEMP/maphy-$backend/player"
+            "$RUNNER_TEMP/maphy-$backend/player" -batchmode -nographics -logFile "$RUNNER_TEMP/player-$backend.log" --corpus-out "$RUNNER_TEMP/corpus-$backend.csv"
+            python3 Tools/compare_corpus.py Validation~/expected.csv "$RUNNER_TEMP/corpus-$backend.csv"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unity-runtime-validation
+          path: |
+            ${{ runner.temp }}/editor-*.log
+            ${{ runner.temp }}/player-*.log
+            ${{ runner.temp }}/corpus-*.csv

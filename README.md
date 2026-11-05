@@ -42,6 +42,11 @@ order.
 See [NUMERICS.md](NUMERICS.md) for the fixed-point arithmetic, overflow, rounding,
 and portable-backend verification contract.
 
+Runtime gates and Unity 2022.3 player instructions are in [VALIDATION.md](VALIDATION.md).
+See [PHYSICS_CAPABILITIES.md](PHYSICS_CAPABILITIES.md) before choosing a world API,
+and [Benchmarks/README.md](Benchmarks/README.md) for allocation diagnosis and
+separate simulation/hash measurements.
+
 ## Core Build
 
 The deterministic core can be checked outside Unity with:
