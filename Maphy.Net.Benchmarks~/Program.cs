@@ -7,8 +7,11 @@ using Maphy.Physics;
 
 internal static class Program
 {
-    private const int WarmupIterations = 8;
-    private const string Header = "Name,Iterations,ElapsedMs,MicrosecondsPerIteration,AllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow";
+    private static int warmupIterations = 60;
+    private static int repeatIndex = 1;
+    private static bool profileEnabled;
+    private static bool bruteForceCCD;
+    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow,ProfileEnabled,SyncMs,CCDPreparationMs,IntegrationMs,PairsMs,ContactsMs,IslandsMs,VelocitySolveMs,PositionSolveMs,FinalizeMs,StatsMs,CCDBroadphaseEnabled,CCDQueries,CCDCandidates,CCDShapeTests,CCDFallbackScans,CCDFallbackCandidates,CCDMovingColliders,CCDProxies,CCDIndexOverflow,SleepMs,SanitizeMs,CCDProxiesCreated,CCDProxiesUpdated,CCDProxiesReused,CCDProxiesRemoved,CCDIndexRebuilds,SimulationP50Ms,SimulationP95Ms,SimulationP99Ms,PairsMin,PairsMax,ContactsMin,ContactsMax,AnyOverflow,TraceHash,CCDQueryMs,CCDShapeMs,CCDProxyMs";
 
     private static int Main(string[] args)
     {
@@ -19,7 +22,11 @@ internal static class Program
         }
 
         int iterations = ReadIntArg(args, "--iterations", 120);
+        warmupIterations = ReadIntArg(args, "--warmup", 60);
+        int repeats = ReadIntArg(args, "--repeat", 1);
         bool quick = HasArg(args, "--quick");
+        profileEnabled = HasArg(args, "--profile");
+        bruteForceCCD = HasArg(args, "--brute-force-ccd");
         int countOverride = ReadIntArg(args, "--count", -1);
         string scenarioFilter = ReadStringArg(args, "--scenario", "all");
         string outputPath = ReadStringArg(args, "--out", null);
@@ -43,46 +50,55 @@ internal static class Program
 
             output.WriteLine(Header);
 
-            if (ShouldRunScenario(scenarioFilter, "StaticQuery"))
+            for (repeatIndex = 1; repeatIndex <= repeats; repeatIndex++)
             {
-                if (countOverride > 0)
+                if (ShouldRunScenario(scenarioFilter, "StaticQuery"))
                 {
-                    RunStaticQuery(countOverride, iterations, output);
+                    if (countOverride > 0)
+                    {
+                        RunStaticQuery(countOverride, iterations, output);
+                    }
+                    else
+                    {
+                        RunStaticQuery(quick ? 100 : 100, iterations, output);
+                        RunStaticQuery(quick ? 200 : 500, iterations, output);
+                        RunStaticQuery(quick ? 300 : 1000, iterations, output);
+                    }
                 }
-                else
+
+                if (ShouldRunScenario(scenarioFilter, "DynamicBroadphase"))
                 {
-                    RunStaticQuery(quick ? 100 : 100, iterations, output);
-                    RunStaticQuery(quick ? 200 : 500, iterations, output);
-                    RunStaticQuery(quick ? 300 : 1000, iterations, output);
+                    if (countOverride > 0)
+                    {
+                        RunDynamicBroadphase(countOverride, iterations, output);
+                    }
+                    else
+                    {
+                        RunDynamicBroadphase(quick ? 100 : 100, iterations, output);
+                        RunDynamicBroadphase(quick ? 200 : 500, iterations, output);
+                    }
                 }
-            }
 
-            if (ShouldRunScenario(scenarioFilter, "DynamicBroadphase"))
-            {
-                if (countOverride > 0)
+                if (ShouldRunScenario(scenarioFilter, "StackSolver"))
                 {
-                    RunDynamicBroadphase(countOverride, iterations, output);
+                    RunStackSolver(countOverride > 0 ? countOverride : quick ? 16 : 48, iterations, output);
                 }
-                else
+
+                if (ShouldRunScenario(scenarioFilter, "SleepingBodies"))
                 {
-                    RunDynamicBroadphase(quick ? 100 : 100, iterations, output);
-                    RunDynamicBroadphase(quick ? 200 : 500, iterations, output);
+                    RunSleepingBodies(countOverride > 0 ? countOverride : quick ? 100 : 500, iterations, output);
                 }
-            }
 
-            if (ShouldRunScenario(scenarioFilter, "StackSolver"))
-            {
-                RunStackSolver(countOverride > 0 ? countOverride : quick ? 16 : 48, iterations, output);
-            }
+                if (ShouldRunScenario(scenarioFilter, "CCD"))
+                {
+                    RunCCD(countOverride > 0 ? countOverride : quick ? 16 : 64, iterations, output);
+                }
 
-            if (ShouldRunScenario(scenarioFilter, "SleepingBodies"))
-            {
-                RunSleepingBodies(countOverride > 0 ? countOverride : quick ? 100 : 500, iterations, output);
-            }
+                if (ShouldRunScenario(scenarioFilter, "DenseContacts"))
+                {
+                    RunDenseContacts(countOverride > 0 ? countOverride : quick ? 100 : 1000, iterations, output);
+                }
 
-            if (ShouldRunScenario(scenarioFilter, "CCD"))
-            {
-                RunCCD(countOverride > 0 ? countOverride : quick ? 16 : 64, iterations, output);
             }
 
             output.Flush();
@@ -219,30 +235,81 @@ internal static class Program
         });
     }
 
+    private static void RunDenseContacts(int count, int iterations, TextWriter output)
+    {
+        var settings = new PhysicsWorldSettings(false);
+        settings.enableSleeping = false;
+        var world = new PhysicsWorld(settings);
+        world.Reserve(count, count, count * 32, count * 32);
+        int side = 1;
+        while (side * side * side < count) side++;
+        fix spacing = (fix)0.9m;
+        for (int i = 0; i < count; i++)
+        {
+            fix3 position = new fix3((i % side) * spacing, ((i / side) % side) * spacing, (i / (side * side)) * spacing);
+            Require(world.CreateBody(position, quaternion.identity, RigidType.Dynamic, out BodyHandle body), "dense body");
+            Require(world.AddAABB(body, fix3.zero, new fix3(1), out _), "dense collider");
+        }
+        Measure($"DenseContacts/{count}", iterations, world, output, () => world.Step(fix.One / 60));
+    }
+
     private static void Measure(string name, int iterations, PhysicsWorld world, TextWriter output, Action step)
     {
-        for (int i = 0; i < WarmupIterations; i++)
+        world.EnableProfiling = profileEnabled;
+        world.EnableCCDBroadphase = !bruteForceCCD;
+        for (int i = 0; i < warmupIterations; i++)
         {
             step();
+            world.ComputeStateHash();
         }
 
-        long beforeAlloc = GC.GetAllocatedBytesForCurrentThread();
-        long startTimestamp = Stopwatch.GetTimestamp();
+        var samples = new long[iterations];
+        int pairsMin = int.MaxValue, pairsMax = 0, contactsMin = int.MaxValue, contactsMax = 0;
+        bool anyOverflow = false;
+        ulong traceHash = 14695981039346656037UL;
+        long simulationTicks = 0, hashTicks = 0;
+        long simulationAllocated = 0, hashAllocated = 0;
         ulong hash = 0;
+        PhysicsWorldStepProfile phases = default;
         for (int i = 0; i < iterations; i++)
         {
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            long start = Stopwatch.GetTimestamp();
             step();
+            long afterStep = Stopwatch.GetTimestamp();
+            long allocatedAfterStep = GC.GetAllocatedBytesForCurrentThread();
+            samples[i] = afterStep - start;
+            simulationTicks += samples[i];
+            PhysicsWorldStepStats frameStats = world.LastStepStats;
+            pairsMin = Math.Min(pairsMin, frameStats.pairCount);
+            pairsMax = Math.Max(pairsMax, frameStats.pairCount);
+            contactsMin = Math.Min(contactsMin, frameStats.contactManifoldCount);
+            contactsMax = Math.Max(contactsMax, frameStats.contactManifoldCount);
+            anyOverflow |= frameStats.HasOverflow || world.LastCCDStats.indexOverflowed;
+            simulationAllocated += allocatedAfterStep - allocatedBefore;
+            phases += world.LastStepProfile;
+
+            start = Stopwatch.GetTimestamp();
             hash = world.ComputeStateHash();
+            hashTicks += Stopwatch.GetTimestamp() - start;
+            unchecked { traceHash = (traceHash ^ hash) * 1099511628211UL; }
+            hashAllocated += GC.GetAllocatedBytesForCurrentThread() - allocatedAfterStep;
         }
 
-        long endTimestamp = Stopwatch.GetTimestamp();
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - beforeAlloc;
+        Array.Sort(samples);
         PhysicsWorldStepStats stats = world.LastStepStats;
-        double elapsedMs = (endTimestamp - startTimestamp) * 1000.0 / Stopwatch.Frequency;
-        double microseconds = elapsedMs * 1000.0 / Math.Max(1, iterations);
-        output.WriteLine(
-            $"{name},{iterations},{elapsedMs:F3},{microseconds:F3},{allocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow}");
+        PhysicsWorldCCDStats ccd = world.LastCCDStats;
+        double simulationMs = simulationTicks * 1000.0 / Stopwatch.Frequency;
+        double hashMs = hashTicks * 1000.0 / Stopwatch.Frequency;
+        output.WriteLine(FormattableString.Invariant(
+            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow},{profileEnabled},{Milliseconds(phases.syncTicks):F3},{Milliseconds(phases.ccdPreparationTicks):F3},{Milliseconds(phases.integrationTicks):F3},{Milliseconds(phases.pairTicks):F3},{Milliseconds(phases.contactTicks):F3},{Milliseconds(phases.islandTicks):F3},{Milliseconds(phases.velocityTicks):F3},{Milliseconds(phases.positionTicks):F3},{Milliseconds(phases.finalizeTicks):F3},{Milliseconds(phases.statsTicks):F3},{world.EnableCCDBroadphase},{ccd.queries},{ccd.candidates},{ccd.shapeTests},{ccd.fallbackScans},{ccd.fallbackCandidates},{ccd.movingColliders},{ccd.proxyCount},{ccd.indexOverflowed},{Milliseconds(phases.sleepTicks):F3},{Milliseconds(phases.sanitizationTicks):F3},{ccd.proxiesCreated},{ccd.proxiesUpdated},{ccd.proxiesReused},{ccd.proxiesRemoved},{ccd.indexRebuilds},{Percentile(samples, 0.50):F3},{Percentile(samples, 0.95):F3},{Percentile(samples, 0.99):F3},{pairsMin},{pairsMax},{contactsMin},{contactsMax},{anyOverflow},{traceHash},{Milliseconds(phases.ccdQueryTicks):F3},{Milliseconds(phases.ccdShapeTicks):F3},{Milliseconds(phases.ccdProxyTicks):F3}"));
+        output.Flush();
     }
+
+    private static double Percentile(long[] sorted, double fraction)
+        => Milliseconds(sorted[Math.Max(0, (int)Math.Ceiling(sorted.Length * fraction) - 1)]);
+
+    private static double Milliseconds(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 
     private static int CeilingSqrt(int value)
     {
@@ -323,8 +390,12 @@ internal static class Program
         output.WriteLine("  dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -- [options]");
         output.WriteLine("Options:");
         output.WriteLine("  --quick                  Use smaller default scenario sizes.");
+        output.WriteLine("  --brute-force-ccd       Use the CCD reference scan for comparison.");
+        output.WriteLine("  --profile               Record simulation-stage wall-clock timings.");
+        output.WriteLine("  --warmup N              Warmup steps before measurement (default 60).");
+        output.WriteLine("  --repeat N              Recreate and measure each scenario N times.");
         output.WriteLine("  --iterations N           Number of measured iterations per scenario.");
-        output.WriteLine("  --scenario A,B           Run selected scenarios: StaticQuery, DynamicBroadphase, StackSolver, SleepingBodies, CCD.");
+        output.WriteLine("  --scenario A,B           Run selected scenarios: StaticQuery, DynamicBroadphase, StackSolver, SleepingBodies, CCD, DenseContacts.");
         output.WriteLine("  --count N                Override scenario object count.");
         output.WriteLine("  --out path.csv           Write CSV output to a file.");
     }
@@ -337,3 +408,4 @@ internal static class Program
         }
     }
 }
+

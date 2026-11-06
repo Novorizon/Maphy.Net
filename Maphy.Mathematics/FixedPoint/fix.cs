@@ -19,10 +19,13 @@ namespace Maphy.Mathematics
         public fix(long v) { value = SafeFromInteger(v).value; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public fix(float v) { value = (long)(v * ONE + 0.5f * (v < 0 ? -1 : 1)); }
+        public fix(float v) { value = fixConvert.FromSingle(v).value; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public fix(double v) { value = (long)(v * ONE); }
+        public fix(double v) { value = fixConvert.FromDouble(v).value; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public fix(decimal v) { value = fixConvert.FromDecimal(v).value; }
 
         //with raw value
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -91,7 +94,7 @@ namespace Maphy.Mathematics
 
         //decimal=>  
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static implicit operator fix(decimal value) { fix v; v.value = (long)(value * ONE); return v; }
+        public static implicit operator fix(decimal value) { return new fix(value); }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator decimal(fix value) { return (decimal)value.value / ONE; }
@@ -269,3 +272,4 @@ namespace Maphy.Mathematics
 
     }
 }
+

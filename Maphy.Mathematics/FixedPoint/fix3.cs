@@ -23,7 +23,7 @@ namespace Maphy.Mathematics
         public static readonly fix3 zero = new fix3(0, 0, 0);
         public static readonly fix3 MaxValue = new fix3(2147483648L);
         public static readonly fix3 MinValue = -MaxValue;
-        public static readonly fix3 NaN = new fix3(float.NaN);
+        public static readonly fix3 NaN = new fix3(fix.NaN);
 
         [FieldOffset(0)]
         public fix x;
@@ -67,6 +67,14 @@ namespace Maphy.Mathematics
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public fix3(fix value)
+        {
+            x = value;
+            y = value;
+            z = value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix3(int x)
         {
             this.x.value = (long)x << fix.PRECISION;
@@ -77,9 +85,9 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public fix3(float x)
         {
-            this.x.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.y.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
-            this.z.value = (long)(x * fix.ONE + 0.5f * (x < 0 ? -1 : 1));
+            this.x = new fix(x);
+            this.y = new fix(x);
+            this.z = new fix(x);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -281,3 +289,4 @@ namespace Maphy.Mathematics
         }
     }
 }
+

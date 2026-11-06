@@ -212,6 +212,18 @@ namespace Maphy.Physics
             }
         }
 
+        public bool TryGetProxy(int colliderIndex, out ColliderHandle collider, out AABB tightBounds, out AABB fatBounds)
+        {
+            collider = ColliderHandle.Invalid;
+            tightBounds = fatBounds = default;
+            if (colliderIndex < 0 || colliderIndex >= colliderNodes.Length) return false;
+            int nodeId = colliderNodes[colliderIndex];
+            if (!IsNodeInUse(nodeId)) return false;
+            ref Node node = ref nodes[nodeId];
+            collider = node.collider; tightBounds = node.tightBounds; fatBounds = node.bounds;
+            return true;
+        }
+
         public void ResetOverflow()
         {
             overflowed = false;
@@ -766,3 +778,4 @@ namespace Maphy.Physics
         }
     }
 }
+

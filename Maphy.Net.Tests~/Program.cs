@@ -10,9 +10,35 @@ internal static class Program
 
     private static void Main()
     {
+        Run("reserved first rotation does not allocate", RuntimeTests.ReservedFirstRotation);
+        Run("IEEE ingress matches exact rational arithmetic", RuntimeTests.BinaryIngress);
+        Run("decimal ingress rejects overflow without throwing", RuntimeTests.DecimalIngress);
+        Run("runtime capability contract rejects unsupported algorithms", RuntimeTests.CapabilityContract);
+        Run("primitive contact entry points agree", RuntimeTests.ContactEntryPoints);
+        Run("CCD accelerated replay matches reference scan", CCDAccelerationTests.DifferentialReplay);
+        Run("CCD covers fast dynamic and kinematic targets", CCDAccelerationTests.FastTargetsAndTies);
+        Run("CCD sparse pruning allocates no memory", CCDAccelerationTests.SparsePruning);
+        Run("profiling aggregates substeps without changing replay", CCDAccelerationTests.ProfileAggregation);
+        Run("CCD proxy reuse follows lifecycle and reservation", CCDReuseTests.ProxyLifecycle);
+        Run("CCD retained envelopes survive horizon changes and large teleports", CCDReuseTests.MotionEnvelopeChanges);
+        Run("island member lists preserve sleep and wake lifecycle", CCDReuseTests.IslandSleepLifecycle);
+        Run("sparse dirty synchronization survives boundaries and lifecycle", DirtySyncTests.SparseLifecycle);
+        Run("dirty synchronization preserves pending CCD snapshots", DirtySyncTests.PendingCCDReplay);
+        Run("canonical box SAT preserves original contact fingerprints", BoxSATTests.FrozenContacts);
+        Run("solver mass cache matches live reciprocals through lifecycle", SolverCacheTests.DifferentialLifecycle);
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
         Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);
+        Run("fixed point wide arithmetic regressions", NumericTests.WideArithmeticRegressions);
+        Run("fixed point operators match BigInteger", NumericTests.OperatorsMatchBigInteger);
+        Run("fixed point integer conversions and shifts match BigInteger", NumericTests.IntegerConversionsAndShifts);
+        Run("fixed point square root satisfies exact integer bounds", NumericTests.SquareRootBounds);
+        Run("fixed point rounding matches decimal", NumericTests.RoundingMatchesDecimal);
+        Run("fixed point vector rounding uses scalar policy", NumericTests.VectorRounding);
+        Run("fixed point vector splats preserve raw scalar values", NumericTests.VectorSplats);
+        Run("fixed point vector operators preserve numeric policy", NumericTests.VectorArithmetic);
+        Run("fixed point angle handles zero and invalid vectors", NumericTests.AngleEdgeCases);
+        Run("fixed point wide arithmetic does not allocate", NumericTests.ArithmeticDoesNotAllocate);
         Run("fix3x3 mul is matrix multiplication", TestFix3x3MatrixMul);
         Run("fix4x4 mul preserves TRS with identity", TestFix4x4MatrixMul);
         Run("capsule capsule overlap uses segment distance", TestCapsuleCapsuleOverlap);
@@ -132,7 +158,25 @@ internal static class Program
         Run("world builds islands from contacts and constraints", TestWorldBuildsIslandsFromContactsAndConstraints);
         Run("sleeping island skips integration and wakes", TestSleepingIslandSkipsIntegrationAndWakes);
 
+        NumericTests.PrintDigest();
+        PrintReplayDigest();
         Console.WriteLine($"Passed {passed} tests.");
+    }
+
+    private static void PrintReplayDigest()
+    {
+        PhysicsWorld core = CreateCoreReplayWorld();
+        World objects = CreateLongReplayWorld(new WorldSettings(true));
+        ulong hash = 14695981039346656037UL;
+        for (int frame = 0; frame < 1000; frame++)
+        {
+            ApplyReplayInputs(objects, frame);
+            core.Step(fix.One / 60);
+            objects.Step(fix.One / 60);
+            hash = unchecked((hash ^ core.ComputeStateHash()) * 1099511628211UL);
+            hash = unchecked((hash ^ objects.ComputeStateHash()) * 1099511628211UL);
+        }
+        Console.WriteLine($"Physics corpus hash: {hash:X16}");
     }
 
     private static void TestFix4Csum()
@@ -3164,3 +3208,4 @@ internal static class Program
         }
     }
 }
+

@@ -4,6 +4,68 @@ This document defines the intended content of Maphy.Net and the engineering
 order for turning the current draft into a reliable deterministic math and
 physics library.
 
+## Execution plan (updated 2026-11-06)
+
+The stages below define the next delivery order. The detailed inventory after
+this plan describes the target API, rather than a claim that every item is done.
+
+| Order | Deliverable | Exit criteria |
+| --- | --- | --- |
+| 1. Numeric repair | Consistent wide arithmetic, overflow/NaN handling, rounding, scalar-to-vector construction, and zero-vector angles. | Normal and portable backends pass the full test suite, independent numeric oracles, allocation checks, and matching corpus hashes. See NUMERICS.md. |
+| 2. Runtime determinism | Freeze raw input vectors and per-frame replay fingerprints for .NET, Unity Mono, and IL2CPP. Audit float/double/decimal ingress, NaN/infinity/range handling, sub-resolution constants, and remaining vector/matrix operations. | A documented runtime/version matrix passes the same raw-value corpus and at least 1,000 replay frames, including lifecycle changes and CCD. No determinism guarantee is published before these checks pass. |
+| 3. Physics capability contract | Document World versus PhysicsWorld support for shapes, queries, GJK/SAT, constraints, events, and Unity components. Resolve the ignored core narrowphase-algorithm parameter and consolidate shared code incrementally. | Every advertised capability has an integration test on its actual public entry point; unsupported combinations have explicit documented behavior. |
+| 4. Allocation and performance | Investigate StackSolver's observed allocation; warm contact paths and measure simulation and state hashing separately. Cover sparse/dense collision, CCD, sleeping, and capacity exhaustion. | Repeated warmed runs meet the documented allocation budget; publish reproducible results for 100 and 1,000 bodies with capacity and overflow state. Preserve correctness and replay fingerprints. |
+| 5. Supported preview package | Select a supported .NET LTS target and explicit Unity versions; add package metadata, examples, versioned releases, and compatibility notes. | A clean checkout builds/tests using supported SDKs, installs into the target Unity versions, and reproduces the example scenes. |
+
+Stage 1 is implemented. The follow-up now supplies exact input-conversion tests,
+a frozen 1,000-frame corpus, Linux/Windows/macOS backend gates, and a Unity 2022.3
+player builder. Actual Mono/IL2CPP execution still needs a licensed runner; stage
+2 is not certified complete. See VALIDATION.md for observed evidence and limits.
+
+Stage 3's capability contract is implemented in PHYSICS_CAPABILITIES.md and
+PhysicsRuntimeCapabilities. Unsupported core GJK selection is rejected explicitly;
+object joints/events remain intentionally outside the reserved core.
+
+Stage 4 now includes the lazy-LUT allocation fix, logarithmic persistent-manifold
+lookup, separate simulation/hash measurement, dense-contact and repeated runs,
+and reproducible 100/1,000-object observations. See Benchmarks/README.md. This is
+an allocation and measurement gate, not a Unity frame-rate guarantee. Stage 5
+and full trigonometric/matrix accuracy audits remain follow-up work.
+
+CCD follow-up now supplies optional per-stage timings, a reserved target-motion
+tree, sorted body/collider ownership indexes, reference-scan differential tests,
+and explicit numerical/index-overflow fallback. The paired sparse 1,000-mover
+measurement improves from 788.113 to 38.754 ms/update (20.34x), with unchanged
+state hashes and zero measured allocation. See Benchmarks/CCD.md for conditions
+and remaining index-preparation/finalization costs; this is not a Unity result.
+
+The next measured follow-up retains/refits CCD proxies and uses reserved island
+member lists for sleep/wake work. Its paired .NET 8 observation is 38.393 to
+15.094 ms/update for CCD and 5.794 to 1.655 ms/update for SleepingBodies, with
+unchanged hashes and zero measured allocation. See Benchmarks/CCD-reuse.md.
+The dirty synchronization follow-up replaces repeated whole-array hit flushes
+with reserved hierarchical bitsets, preserving global ascending update order.
+The pinned six-pair CCD median is 12.564 to 8.235 ms/update (1.53x); unpinned
+results show substantial scheduling variation and are retained for comparison.
+Both backends pass 145 test groups with unchanged frozen replay fingerprints.
+See Benchmarks/CCD-sync.md.
+
+The dense/solver pass now measures 100/1,000 bodies with per-frame P50/P95/P99,
+rolling trace hashes and any-frame overflow gates. Canonical box SAT skips duplicate
+axes, the solver caches stable reciprocals per update, and CCD skips unchanged
+velocity-envelope refreshes. Independent 1,000-body pairs are 95.125 to 59.884 ms
+for dense contacts, 24.238 to 20.076 ms for stacking and 7.219 to 6.792 ms for CCD.
+Both backends pass 147 test groups and the unchanged frozen corpus. See
+Benchmarks/DenseContacts.md for source revisions, conditions, raw CSVs and limits.
+Contact generation and velocity solving still dominate dense workloads; further
+split these costs before the next change. Unity execution remains pending.
+Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
+correctness and capability gates.
+
+CI exercises normal and forced-portable arithmetic on .NET 9 across three
+operating systems. The Unity workflow is manual and requires a configured,
+licensed self-hosted runner; passing .NET jobs is not Unity certification.
+
 ## 1. Fixed-Point Mathematics
 
 ### 1.1 Scalar Core
@@ -319,3 +381,4 @@ Benchmark areas:
 9. Add rigid body integration.
 10. Add solver and callbacks.
 11. Split assemblies and move Unity adapters out of the core.
+

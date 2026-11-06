@@ -1,0 +1,66 @@
+name: Numeric consistency
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  arithmetic-backends:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Run full suite with Int128 arithmetic
+        shell: bash
+        run: dotnet run --project Maphy.Net.Tests~/Maphy.Net.Tests.csproj -c Release | tee "$RUNNER_TEMP/maphy-native.log"
+      - name: Run full suite with portable arithmetic
+        shell: bash
+        run: dotnet run --project Maphy.Net.Tests~/Maphy.Net.Tests.csproj -c Release -p:MaphyForcePortable=true | tee "$RUNNER_TEMP/maphy-portable.log"
+      - name: Compare deterministic corpus hashes
+        shell: bash
+        run: |
+          grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-native.log" > "$RUNNER_TEMP/maphy-native.hashes"
+          grep -E '^(Numeric|Physics) corpus hash:' "$RUNNER_TEMP/maphy-portable.log" > "$RUNNER_TEMP/maphy-portable.hashes"
+          diff -u "$RUNNER_TEMP/maphy-native.hashes" "$RUNNER_TEMP/maphy-portable.hashes"
+      - name: Compare frozen cross-runtime corpus with Int128
+        shell: bash
+        run: |
+          dotnet run --project Validation~/Maphy.Validation.csproj -c Release -- --out "$RUNNER_TEMP/corpus-native.csv"
+          python Tools/compare_corpus.py Validation~/expected.csv "$RUNNER_TEMP/corpus-native.csv"
+      - name: Compare frozen cross-runtime corpus with portable arithmetic
+        shell: bash
+        run: |
+          dotnet run --project Validation~/Maphy.Validation.csproj -c Release -p:MaphyForcePortable=true -- --out "$RUNNER_TEMP/corpus-portable.csv"
+          python Tools/compare_corpus.py Validation~/expected.csv "$RUNNER_TEMP/corpus-portable.csv"
+      - name: Check repeated benchmark allocation and capacity
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --quick --iterations 30 --repeat 2 --profile --out "$RUNNER_TEMP/benchmarks.csv"
+          python Tools/check_benchmarks.py "$RUNNER_TEMP/benchmarks.csv"
+      - name: Check thousand-body dense and stacked workloads
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario DenseContacts,StackSolver --count 1000 --warmup 2 --iterations 3 --repeat 2 --profile --out "$RUNNER_TEMP/dense.csv"
+          python Tools/check_benchmarks.py "$RUNNER_TEMP/dense.csv"
+      - name: Compare CCD reference and indexed candidate selection
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario CCD --count 100 --warmup 2 --iterations 3 --repeat 2 --profile --brute-force-ccd --out "$RUNNER_TEMP/ccd-reference.csv"
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario CCD --count 100 --warmup 2 --iterations 3 --repeat 2 --profile --out "$RUNNER_TEMP/ccd-indexed.csv"
+          python Tools/compare_ccd_benchmarks.py "$RUNNER_TEMP/ccd-reference.csv" "$RUNNER_TEMP/ccd-indexed.csv"

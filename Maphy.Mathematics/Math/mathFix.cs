@@ -28,82 +28,54 @@ namespace Maphy.Mathematics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix sign(fix x) { return (int)(x >> 63); }
 
-        /// <summary>Returns the result of truncating a float value to an integral float value.</summary>
+        /// <summary>Truncates toward zero. Invalid input remains invalid.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix trunc(fix x)
         {
-            x.value = x.value >> fix.PRECISION << fix.PRECISION;
-            if (sign(x) != 0)
-                x.value = x.value + (1 << fix.PRECISION);
-            return x;
+            return fix.IsNaN(x) ? fix.NaN : fix.Raw(x.value / fix.ONE * fix.ONE);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix frac(fix x) { return abs(x - trunc(x)); }
+        public static fix frac(fix x) { return fix.IsNaN(x) ? fix.NaN : abs(fix.Raw(x.value % fix.ONE)); }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix floor(fix x) { x.value = x.value >> fix.PRECISION << fix.PRECISION; return x; }
+        public static fix floor(fix x)
+        {
+            if (fix.IsNaN(x)) return fix.NaN;
+            fix integral = trunc(x);
+            return x.value % fix.ONE < 0 ? integral - fix.One : integral;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix ceil(fix value)
         {
-            if ((value.value << (fix.BITS - fix.PRECISION)) == 0)
-                return value;
-
-            value.value = value.value >> fix.PRECISION << fix.PRECISION;
-            value += fix.One;
-            return value;
+            if (fix.IsNaN(value)) return fix.NaN;
+            fix integral = trunc(value);
+            return value.value % fix.ONE > 0 ? integral + fix.One : integral;
         }
 
+        /// <summary>Rounds to the nearest integer, with ties away from zero.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix round(fix x)
         {
-            fix fractional = frac(x);
-            fix truncation = trunc(x);
-            if (fractional.value < (1 << (fix.PRECISION - 2)))
-            {
-                return truncation;
-            }
-            else
-            {
-                int sign = (int)(x >> 63);
-                if (sign == 0)
-                {
-                    x.value = truncation.value + fix.ONE;
-                    return x;
-                }
-                else
-                {
-                    x.value = truncation.value - fix.ONE;
-                    return x;
-                }
-            }
+            if (fix.IsNaN(x)) return fix.NaN;
+            long remainder = x.value % fix.ONE;
+            fix integral = trunc(x);
+            if (remainder >= fix.ONE / 2) return integral + fix.One;
+            if (remainder <= -fix.ONE / 2) return integral - fix.One;
+            return integral;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix add(fix a, fix b)
         {
-            long x = a.value;
-            long y = b.value;
-            long sum = x + y;
-            if (((~(x ^ y) & (x ^ sum)) & long.MinValue) != 0)
-            {
-                return fix.NaN;
-            }
-            return fix.Raw(sum);
+            return fix.SafeAdd(a, b);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static fix sub(fix x, fix y)
         {
-            var xl = x.value;
-            var yl = y.value;
-            var diff = xl - yl;
-            if ((((xl ^ yl) & (xl ^ diff)) & long.MinValue) != 0)
-            {
-                return fix.NaN;
-            }
-            return fix.Raw(diff);
+            return fix.SafeSub(x, y);
         }
 
         //[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -131,7 +103,7 @@ namespace Maphy.Mathematics
         //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static fix mod(fix x, fix y) { x.value = x.value == fix.Min.value & y.value == -1 ? 0 : x.value % y.value; return x; }
+        public static fix mod(fix x, fix y) { return x % y; }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static fix pow(fix x, int n)
@@ -272,3 +244,4 @@ namespace Maphy.Mathematics
 
     }
 }
+

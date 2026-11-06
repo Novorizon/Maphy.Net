@@ -39,6 +39,22 @@ and finally a small physics world on top of it.
 See [ROADMAP.md](ROADMAP.md) for the planned module list and engineering cleanup
 order.
 
+See [NUMERICS.md](NUMERICS.md) for the fixed-point arithmetic, overflow, rounding,
+and portable-backend verification contract.
+
+Runtime gates and Unity 2022.3 player instructions are in [VALIDATION.md](VALIDATION.md).
+See [PHYSICS_CAPABILITIES.md](PHYSICS_CAPABILITIES.md) before choosing a world API,
+and [Benchmarks/README.md](Benchmarks/README.md) for allocation diagnosis and
+separate simulation/hash measurements.
+CCD acceleration, optional stage profiling, reference comparisons and memory
+costs are documented in [Benchmarks/CCD.md](Benchmarks/CCD.md).
+The retained-index and island-sleep follow-up is in
+[Benchmarks/CCD-reuse.md](Benchmarks/CCD-reuse.md).
+Sparse dirty synchronization and its paired measurements are in
+[Benchmarks/CCD-sync.md](Benchmarks/CCD-sync.md).
+Dense contacts, solver reciprocal caching and remaining CCD costs are covered in
+[Benchmarks/DenseContacts.md](Benchmarks/DenseContacts.md), including per-frame latency summaries.
+
 ## Core Build
 
 The deterministic core can be checked outside Unity with:
@@ -181,3 +197,4 @@ dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -- --scen
 It prints CSV rows with elapsed time, allocated bytes, replay hash, active
 counts, dirty sync counts, broadphase/narrowphase counters, manifold reuse/drop
 counters, solver contact points, sleep counts, and overflow state.
+
