@@ -11,7 +11,7 @@ internal static class Program
     private static int repeatIndex = 1;
     private static bool profileEnabled;
     private static bool bruteForceCCD;
-    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow,ProfileEnabled,SyncMs,CCDPreparationMs,IntegrationMs,PairsMs,ContactsMs,IslandsMs,VelocitySolveMs,PositionSolveMs,FinalizeMs,StatsMs,CCDBroadphaseEnabled,CCDQueries,CCDCandidates,CCDShapeTests,CCDFallbackScans,CCDFallbackCandidates,CCDMovingColliders,CCDProxies,CCDIndexOverflow,SleepMs,SanitizeMs,CCDProxiesCreated,CCDProxiesUpdated,CCDProxiesReused,CCDProxiesRemoved,CCDIndexRebuilds";
+    private const string Header = "Name,Repeat,Iterations,WarmupIterations,SimulationElapsedMs,SimulationMicrosecondsPerIteration,SimulationAllocatedBytes,HashElapsedMs,HashMicrosecondsPerIteration,HashAllocatedBytes,Hash,Bodies,Colliders,Pairs,Contacts,BodySyncs,ColliderSyncs,BroadphaseMovedProxies,BroadphaseCandidates,NarrowphaseTests,ManifoldNew,ManifoldReused,ManifoldDropped,SolverPoints,SleepingBodies,AwakeDynamicBodies,Overflow,ProfileEnabled,SyncMs,CCDPreparationMs,IntegrationMs,PairsMs,ContactsMs,IslandsMs,VelocitySolveMs,PositionSolveMs,FinalizeMs,StatsMs,CCDBroadphaseEnabled,CCDQueries,CCDCandidates,CCDShapeTests,CCDFallbackScans,CCDFallbackCandidates,CCDMovingColliders,CCDProxies,CCDIndexOverflow,SleepMs,SanitizeMs,CCDProxiesCreated,CCDProxiesUpdated,CCDProxiesReused,CCDProxiesRemoved,CCDIndexRebuilds,SimulationP50Ms,SimulationP95Ms,SimulationP99Ms,PairsMin,PairsMax,ContactsMin,ContactsMax,AnyOverflow,TraceHash,CCDQueryMs,CCDShapeMs,CCDProxyMs";
 
     private static int Main(string[] args)
     {
@@ -263,6 +263,10 @@ internal static class Program
             world.ComputeStateHash();
         }
 
+        var samples = new long[iterations];
+        int pairsMin = int.MaxValue, pairsMax = 0, contactsMin = int.MaxValue, contactsMax = 0;
+        bool anyOverflow = false;
+        ulong traceHash = 14695981039346656037UL;
         long simulationTicks = 0, hashTicks = 0;
         long simulationAllocated = 0, hashAllocated = 0;
         ulong hash = 0;
@@ -274,24 +278,36 @@ internal static class Program
             step();
             long afterStep = Stopwatch.GetTimestamp();
             long allocatedAfterStep = GC.GetAllocatedBytesForCurrentThread();
-            simulationTicks += afterStep - start;
+            samples[i] = afterStep - start;
+            simulationTicks += samples[i];
+            PhysicsWorldStepStats frameStats = world.LastStepStats;
+            pairsMin = Math.Min(pairsMin, frameStats.pairCount);
+            pairsMax = Math.Max(pairsMax, frameStats.pairCount);
+            contactsMin = Math.Min(contactsMin, frameStats.contactManifoldCount);
+            contactsMax = Math.Max(contactsMax, frameStats.contactManifoldCount);
+            anyOverflow |= frameStats.HasOverflow || world.LastCCDStats.indexOverflowed;
             simulationAllocated += allocatedAfterStep - allocatedBefore;
             phases += world.LastStepProfile;
 
             start = Stopwatch.GetTimestamp();
             hash = world.ComputeStateHash();
             hashTicks += Stopwatch.GetTimestamp() - start;
+            unchecked { traceHash = (traceHash ^ hash) * 1099511628211UL; }
             hashAllocated += GC.GetAllocatedBytesForCurrentThread() - allocatedAfterStep;
         }
 
+        Array.Sort(samples);
         PhysicsWorldStepStats stats = world.LastStepStats;
         PhysicsWorldCCDStats ccd = world.LastCCDStats;
         double simulationMs = simulationTicks * 1000.0 / Stopwatch.Frequency;
         double hashMs = hashTicks * 1000.0 / Stopwatch.Frequency;
         output.WriteLine(FormattableString.Invariant(
-            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow},{profileEnabled},{Milliseconds(phases.syncTicks):F3},{Milliseconds(phases.ccdPreparationTicks):F3},{Milliseconds(phases.integrationTicks):F3},{Milliseconds(phases.pairTicks):F3},{Milliseconds(phases.contactTicks):F3},{Milliseconds(phases.islandTicks):F3},{Milliseconds(phases.velocityTicks):F3},{Milliseconds(phases.positionTicks):F3},{Milliseconds(phases.finalizeTicks):F3},{Milliseconds(phases.statsTicks):F3},{world.EnableCCDBroadphase},{ccd.queries},{ccd.candidates},{ccd.shapeTests},{ccd.fallbackScans},{ccd.fallbackCandidates},{ccd.movingColliders},{ccd.proxyCount},{ccd.indexOverflowed},{Milliseconds(phases.sleepTicks):F3},{Milliseconds(phases.sanitizationTicks):F3},{ccd.proxiesCreated},{ccd.proxiesUpdated},{ccd.proxiesReused},{ccd.proxiesRemoved},{ccd.indexRebuilds}"));
+            $"{name},{repeatIndex},{iterations},{warmupIterations},{simulationMs:F3},{simulationMs * 1000.0 / iterations:F3},{simulationAllocated},{hashMs:F3},{hashMs * 1000.0 / iterations:F3},{hashAllocated},{hash},{stats.activeBodyCount},{stats.activeColliderCount},{stats.pairCount},{stats.contactManifoldCount},{stats.bodySyncCount},{stats.colliderSyncCount},{stats.broadphaseMovedProxyCount},{stats.broadphaseCandidateCount},{stats.narrowPhaseTestCount},{stats.contactManifoldNewCount},{stats.contactManifoldReusedCount},{stats.contactManifoldDroppedCount},{stats.solverContactPointCount},{stats.sleepingBodyCount},{stats.awakeDynamicBodyCount},{stats.HasOverflow},{profileEnabled},{Milliseconds(phases.syncTicks):F3},{Milliseconds(phases.ccdPreparationTicks):F3},{Milliseconds(phases.integrationTicks):F3},{Milliseconds(phases.pairTicks):F3},{Milliseconds(phases.contactTicks):F3},{Milliseconds(phases.islandTicks):F3},{Milliseconds(phases.velocityTicks):F3},{Milliseconds(phases.positionTicks):F3},{Milliseconds(phases.finalizeTicks):F3},{Milliseconds(phases.statsTicks):F3},{world.EnableCCDBroadphase},{ccd.queries},{ccd.candidates},{ccd.shapeTests},{ccd.fallbackScans},{ccd.fallbackCandidates},{ccd.movingColliders},{ccd.proxyCount},{ccd.indexOverflowed},{Milliseconds(phases.sleepTicks):F3},{Milliseconds(phases.sanitizationTicks):F3},{ccd.proxiesCreated},{ccd.proxiesUpdated},{ccd.proxiesReused},{ccd.proxiesRemoved},{ccd.indexRebuilds},{Percentile(samples, 0.50):F3},{Percentile(samples, 0.95):F3},{Percentile(samples, 0.99):F3},{pairsMin},{pairsMax},{contactsMin},{contactsMax},{anyOverflow},{traceHash},{Milliseconds(phases.ccdQueryTicks):F3},{Milliseconds(phases.ccdShapeTicks):F3},{Milliseconds(phases.ccdProxyTicks):F3}"));
         output.Flush();
     }
+
+    private static double Percentile(long[] sorted, double fraction)
+        => Milliseconds(sorted[Math.Max(0, (int)Math.Ceiling(sorted.Length * fraction) - 1)]);
 
     private static double Milliseconds(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
 

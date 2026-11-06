@@ -14,6 +14,7 @@ namespace Maphy.Physics
         private fix3 ccdEnvelopeMin, ccdEnvelopeMax;
         private fix ccdHorizon;
         private long ccdQueries, ccdCandidates, ccdShapeTests, ccdFallbackScans, ccdFallbackCandidates, ccdMovingColliders;
+        private long ccdQueryTicks, ccdShapeTicks, ccdProxyTicks;
         private long ccdProxiesCreated, ccdProxiesUpdated, ccdProxiesReused, ccdProxiesRemoved, ccdIndexRebuilds;
 
         /// <summary>Diagnostic/reference switch. Both paths must produce identical simulation state.</summary>
@@ -62,6 +63,7 @@ namespace Maphy.Physics
 
         private void PrepareCCD(fix deltaTime)
         {
+            ccdQueryTicks = ccdShapeTicks = ccdProxyTicks = 0;
             ccdQueries = ccdCandidates = ccdShapeTests = ccdFallbackScans = ccdFallbackCandidates = ccdMovingColliders = 0;
             ccdProxiesCreated = ccdProxiesUpdated = ccdProxiesReused = ccdProxiesRemoved = ccdIndexRebuilds = 0;
             ccdPrepared = settings.enableCCD && EnableCCDBroadphase && deltaTime > fix.Zero;
@@ -126,6 +128,13 @@ namespace Maphy.Physics
         }
 
         private void UpdateCCDProxy(int index)
+        {
+            long start = EnableProfiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            UpdateCCDProxyCore(index);
+            if (EnableProfiling) ccdProxyTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+        }
+
+        private void UpdateCCDProxyCore(int index)
         {
             if (!ccdPrepared || !ccdIndexUsable || !IsColliderActive(index) || colliders[index].isTrigger) return;
             PhysicsWorldCollider collider = colliders[index];
@@ -232,8 +241,11 @@ namespace Maphy.Physics
             fix3 relativeDelta = translationDelta - GetContinuousTargetDelta(colliders[index].body, deltaTime);
             if (math.lengthsq(relativeDelta) <= math.Epsilon) return;
             ccdShapeTests++;
-            if (!TryComputeColliderTimeOfImpact(movingShape, colliders[index].worldShape, movingBounds,
-                colliders[index].bounds, relativeDelta, out fix fraction, out fix3 normal)) return;
+            long start = EnableProfiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            bool intersects = TryComputeColliderTimeOfImpact(movingShape, colliders[index].worldShape, movingBounds,
+                colliders[index].bounds, relativeDelta, out fix fraction, out fix3 normal);
+            if (EnableProfiling) ccdShapeTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+            if (!intersects) return;
             int target = colliders[index].handle.Index;
             if (fraction > bestFraction || (fraction == bestFraction && target >= bestColliderIndex)) return;
             found = true; bestFraction = fraction; bestNormal = normal; bestColliderIndex = target;

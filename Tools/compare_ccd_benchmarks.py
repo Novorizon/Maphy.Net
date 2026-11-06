@@ -21,13 +21,16 @@ def compare(reference, indexed, same_backend=False):
         b = after[key]
         for field in ("Iterations", "WarmupIterations", "Hash", "Bodies", "Colliders"):
             if a[field] != b[field]: raise ValueError(f"{key}: different {field}")
+        for field in ("TraceHash", "PairsMin", "PairsMax", "ContactsMin", "ContactsMax"):
+            if field in a and field in b and a[field] != b[field]:
+                raise ValueError(f"{key}: different {field}")
         expected_before = "true" if same_backend else "false"
         if a["CCDBroadphaseEnabled"].lower() != expected_before or b["CCDBroadphaseEnabled"].lower() != "true":
             raise ValueError("Expected reference scan followed by indexed CCD")
         for row in (a, b):
             if any(int(row[field]) for field in ("SimulationAllocatedBytes", "HashAllocatedBytes")):
                 raise ValueError(f"{key}: measured allocation")
-            if row["Overflow"].lower() != "false" or row["CCDIndexOverflow"].lower() != "false":
+            if row.get("AnyOverflow", "false").lower() != "false" or row["Overflow"].lower() != "false" or row["CCDIndexOverflow"].lower() != "false":
                 raise ValueError(f"{key}: capacity overflow")
         if int(b["CCDFallbackScans"]) or int(b["CCDShapeTests"]) > int(a["CCDShapeTests"]):
             raise ValueError(f"{key}: sparse CCD failed to prune without fallback")

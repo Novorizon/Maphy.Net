@@ -207,12 +207,16 @@ internal static class CCDAccelerationTests
         Same(fast, slow, "profiling does not affect state");
         if (fast.LastStepProfile.updateCount != 3 || fast.LastStepProfile.TotalTicks <= 0)
             throw new InvalidOperationException("profiling did not aggregate substeps");
+        if (fast.LastStepProfile.ccdQueryTicks < fast.LastStepProfile.ccdShapeTicks
+            || fast.LastStepProfile.ccdQueryTicks > fast.LastStepProfile.integrationTicks
+            || fast.LastStepProfile.ccdProxyTicks <= 0)
+            throw new InvalidOperationException("nested CCD phase diagnostics are invalid");
         fast.Step(fix.Zero, dt, 8);
         if (fast.LastStepProfile.updateCount != 0 || fast.LastCCDStats.queries != 0)
             throw new InvalidOperationException("zero-substep diagnostics are stale");
         fast.EnableProfiling = false;
         fast.Step(dt);
-        if (fast.LastStepProfile.TotalTicks != 0) throw new InvalidOperationException("disabled profiler retained timings");
+        if (fast.LastStepProfile.ccdQueryTicks != 0 || fast.LastStepProfile.ccdShapeTicks != 0 || fast.LastStepProfile.ccdProxyTicks != 0 || fast.LastStepProfile.TotalTicks != 0) throw new InvalidOperationException("disabled profiler retained timings");
         fast.EnableProfiling = true;
         fast.Step(fix.Zero, fix.Zero, 8);
         if (fast.LastStepProfile.updateCount != 1)

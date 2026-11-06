@@ -51,6 +51,12 @@ jobs:
         run: |
           dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --quick --iterations 30 --repeat 2 --profile --out "$RUNNER_TEMP/benchmarks.csv"
           python Tools/check_benchmarks.py "$RUNNER_TEMP/benchmarks.csv"
+      - name: Check thousand-body dense and stacked workloads
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          dotnet run --project Maphy.Net.Benchmarks~/Maphy.Net.Benchmarks.csproj -c Release -- --scenario DenseContacts,StackSolver --count 1000 --warmup 2 --iterations 3 --repeat 2 --profile --out "$RUNNER_TEMP/dense.csv"
+          python Tools/check_benchmarks.py "$RUNNER_TEMP/dense.csv"
       - name: Compare CCD reference and indexed candidate selection
         if: runner.os == 'Linux'
         shell: bash

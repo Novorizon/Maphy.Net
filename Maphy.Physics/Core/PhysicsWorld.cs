@@ -791,7 +791,7 @@ namespace Maphy.Physics
             long statsTicks = ProfileElapsed(ref stamp, profile);
             LastStepProfile = profile ? new PhysicsWorldStepProfile(syncTicks, ccdPreparationTicks, integrationTicks, pairTicks,
                 contactTicks, islandTicks, velocityTicks, positionTicks, finalizeTicks, statsTicks, 1,
-                sleepTicks, sanitizationTicks) : default;
+                sleepTicks, sanitizationTicks, ccdQueryTicks, ccdShapeTicks, ccdProxyTicks) : default;
         }
 
         private static long ProfileElapsed(ref long stamp, bool enabled)
@@ -1238,7 +1238,10 @@ namespace Maphy.Physics
 
         private bool TryComputeTimeOfImpact(PhysicsWorldBody movingBody, fix3 translationDelta, fix deltaTime, out ContinuousHit hit)
         {
-            return FindCCDTimeOfImpact(movingBody, translationDelta, deltaTime, out hit);
+            long start = EnableProfiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            bool found = FindCCDTimeOfImpact(movingBody, translationDelta, deltaTime, out hit);
+            if (EnableProfiling) ccdQueryTicks += System.Diagnostics.Stopwatch.GetTimestamp() - start;
+            return found;
         }
 
         private fix3 GetContinuousTargetDelta(BodyHandle targetBody, fix deltaTime)
