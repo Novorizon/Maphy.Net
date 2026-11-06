@@ -159,6 +159,9 @@ namespace Maphy.Physics
             EnsureCapacity(ref bodyVersions, bodies.Length);
             EnsureCapacity(ref bodyAlive, bodies.Length);
             bodyDirty.Reserve(bodies.Length);
+            EnsureCapacity(ref solverInverseMasses, bodies.Length);
+            EnsureCapacity(ref solverInverseInertias, bodies.Length);
+            solverMassesPrepared = false;
             EnsureCapacity(ref islandParent, bodies.Length);
             EnsureCapacity(ref islandRank, bodies.Length);
             EnsureCapacity(ref islandBodyCounts, bodies.Length);
@@ -773,9 +776,11 @@ namespace Maphy.Physics
             BuildIslands();
             WakeSleepingBodiesForActiveContacts();
             long islandTicks = ProfileElapsed(ref stamp, profile);
+            PrepareSolverMasses();
             SolveVelocity(deltaTime);
             long velocityTicks = ProfileElapsed(ref stamp, profile);
             SolvePositions();
+            solverMassesPrepared = false;
             long positionTicks = ProfileElapsed(ref stamp, profile);
             SanitizeBodies(deltaTime);
             long sanitizationTicks = ProfileElapsed(ref stamp, profile);
@@ -2425,7 +2430,7 @@ namespace Maphy.Physics
             }
 
             body = bodies[handle.index];
-            inverseMass = body.inverseMass;
+            inverseMass = solverMassesPrepared ? solverInverseMasses[handle.index] : body.inverseMass;
             return body.enabled;
         }
 
@@ -2450,14 +2455,14 @@ namespace Maphy.Physics
             if (hasBody0 && inverseMass0 > fix.Zero)
             {
                 body0.velocity -= impulse * inverseMass0;
-                body0.angularVelocity -= body0.inverseInertia * math.cross(relativePoint0, impulse);
+                body0.angularVelocity -= GetSolverInverseInertia(body0) * math.cross(relativePoint0, impulse);
                 bodies[handle0.index] = body0;
             }
 
             if (hasBody1 && inverseMass1 > fix.Zero)
             {
                 body1.velocity += impulse * inverseMass1;
-                body1.angularVelocity += body1.inverseInertia * math.cross(relativePoint1, impulse);
+                body1.angularVelocity += GetSolverInverseInertia(body1) * math.cross(relativePoint1, impulse);
                 bodies[handle1.index] = body1;
             }
         }
@@ -2951,14 +2956,14 @@ namespace Maphy.Physics
             return body.velocity + math.cross(body.angularVelocity, relativePoint);
         }
 
-        private static fix GetAngularEffectiveMass(PhysicsWorldBody body, fix3 relativePoint, fix3 direction)
+        private fix GetAngularEffectiveMass(PhysicsWorldBody body, fix3 relativePoint, fix3 direction)
         {
             if (!body.IsDynamic)
             {
                 return fix.Zero;
             }
 
-            fix3 angularVelocityPerImpulse = body.inverseInertia * math.cross(relativePoint, direction);
+            fix3 angularVelocityPerImpulse = GetSolverInverseInertia(body) * math.cross(relativePoint, direction);
             return math.dot(math.cross(angularVelocityPerImpulse, relativePoint), direction);
         }
 

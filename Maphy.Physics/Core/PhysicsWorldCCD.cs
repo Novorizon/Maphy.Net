@@ -123,7 +123,11 @@ namespace Maphy.Physics
         private void RefreshCCDBody(int index)
         {
             if (!ccdPrepared) return;
-            ccdTargetVelocities[index] = GetCCDTargetVelocity(bodies[index].handle);
+            fix3 velocity = GetCCDTargetVelocity(bodies[index].handle);
+            // Every collider shape update also updates its proxy in the same flush.
+            // Without a target-velocity change, all envelopes are already current.
+            if (velocity == ccdTargetVelocities[index]) return;
+            ccdTargetVelocities[index] = velocity;
             for (int i = bodyColliderHeads[index]; i != -1; i = colliderNext[i]) UpdateCCDProxy(i);
         }
 

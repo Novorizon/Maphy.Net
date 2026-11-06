@@ -52,6 +52,8 @@ The retained-index and island-sleep follow-up is in
 [Benchmarks/CCD-reuse.md](Benchmarks/CCD-reuse.md).
 Sparse dirty synchronization and its paired measurements are in
 [Benchmarks/CCD-sync.md](Benchmarks/CCD-sync.md).
+Dense contacts, solver reciprocal caching and remaining CCD costs are covered in
+[Benchmarks/DenseContacts.md](Benchmarks/DenseContacts.md), including per-frame latency summaries.
 
 ## Core Build
 

@@ -24,6 +24,8 @@ internal static class Program
         Run("island member lists preserve sleep and wake lifecycle", CCDReuseTests.IslandSleepLifecycle);
         Run("sparse dirty synchronization survives boundaries and lifecycle", DirtySyncTests.SparseLifecycle);
         Run("dirty synchronization preserves pending CCD snapshots", DirtySyncTests.PendingCCDReplay);
+        Run("canonical box SAT preserves original contact fingerprints", BoxSATTests.FrozenContacts);
+        Run("solver mass cache matches live reciprocals through lifecycle", SolverCacheTests.DifferentialLifecycle);
         Run("fix4 csum includes w", TestFix4Csum);
         Run("fix sqrt converges below one", TestFixSqrt);
         Run("fix arithmetic reports overflow safely", TestFixArithmeticReportsOverflowSafely);

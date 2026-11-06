@@ -106,6 +106,7 @@ unchanged. .NET Standard 2.1 builds without warnings/errors; repeated profiled
 quick benchmarks pass allocation, capacity, phase-total and index-reuse gates.
 Actual Unity 2022.3 Mono/IL2CPP execution remains pending a licensed runner.
 
-The quadratic dirty scan is removed. Next, profile dense contact generation and
-solving, and the remaining CCD TOI/proxy-refit cost. Measure frame distributions
+The quadratic dirty scan is removed. The subsequent [dense/solver report](DenseContacts.md)
+profiles and optimizes contact generation, solver reciprocals and redundant CCD
+proxy refreshes, with per-frame latency summaries and matched rolling traces. Measure frame distributions
 and representative scenes before choosing the next algorithm change.

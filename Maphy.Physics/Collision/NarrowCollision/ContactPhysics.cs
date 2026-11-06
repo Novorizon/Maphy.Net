@@ -137,35 +137,54 @@ namespace Maphy.Physics
             int edgeAxisIndex1 = -1;
             fix3 delta = box1.center - box0.center;
 
-            for (int i = 0; i < 3; i++)
+            if (TryGetCanonicalBoxOverlaps(box0, box1, delta, out fix3 overlaps))
             {
-                if (!TestBoxAxis(box0, box1, box0.GetAxis(i), delta, i, -1, -1, true, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
+                // The remaining face/cross axes duplicate these exact unit axes.
+                // Keep x/y/z order and the original strict tolerance tie rule.
+                for (int i = 0; i < 3; i++)
                 {
-                    return false;
-                }
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                if (!TestBoxAxis(box0, box1, box1.GetAxis(i), delta, i, -1, -1, false, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
-                {
-                    return false;
-                }
-            }
-
-            for (int i = 0; i < 3; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    fix3 axis = math.cross(box0.GetAxis(i), box1.GetAxis(j));
-                    if (math.lengthsq(axis) <= fix._0_0001)
+                    fix depth = overlaps[i];
+                    if (depth < fix.Zero) return false;
+                    if (depth + fix._0_0001 < penetrationDepth)
                     {
-                        continue;
+                        penetrationDepth = depth;
+                        normal = delta[i] >= fix.Zero ? box0.GetAxis(i) : -box0.GetAxis(i);
+                        referenceAxisIndex = i;
                     }
-
-                    if (!TestBoxAxis(box0, box1, axis, delta, -1, i, j, true, false, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    if (!TestBoxAxis(box0, box1, box0.GetAxis(i), delta, i, -1, -1, true, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
                     {
                         return false;
+                    }
+                }
+
+                for (int i = 0; i < 3; i++)
+                {
+                    if (!TestBoxAxis(box0, box1, box1.GetAxis(i), delta, i, -1, -1, false, true, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
+                    {
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < 3; i++)
+                {
+                    for (int j = 0; j < 3; j++)
+                    {
+                        fix3 axis = math.cross(box0.GetAxis(i), box1.GetAxis(j));
+                        if (math.lengthsq(axis) <= fix._0_0001)
+                        {
+                            continue;
+                        }
+
+                        if (!TestBoxAxis(box0, box1, axis, delta, -1, i, j, true, false, ref penetrationDepth, ref normal, ref referenceAxisIndex, ref referenceIsBox0, ref faceContact, ref edgeAxisIndex0, ref edgeAxisIndex1))
+                        {
+                            return false;
+                        }
                     }
                 }
             }
@@ -198,6 +217,24 @@ namespace Maphy.Physics
             }
 
             return true;
+        }
+
+        private static bool TryGetCanonicalBoxOverlaps(BoxData box0, BoxData box1, fix3 delta, out fix3 overlaps)
+        {
+            overlaps = default;
+            if (box0.axis0 != fix3.right || box0.axis1 != fix3.up || box0.axis2 != fix3.forward
+                || box1.axis0 != fix3.right || box1.axis1 != fix3.up || box1.axis2 != fix3.forward
+                || !PhysicsSafety.IsFinite(box0.center) || !PhysicsSafety.IsFinite(box1.center)
+                || !PhysicsSafety.IsFinite(box0.extents) || !PhysicsSafety.IsFinite(box1.extents)
+                || !PhysicsSafety.IsFinite(delta)
+                || box0.extents.x < fix.Zero || box0.extents.y < fix.Zero || box0.extents.z < fix.Zero
+                || box1.extents.x < fix.Zero || box1.extents.y < fix.Zero || box1.extents.z < fix.Zero)
+                return false;
+            fix3 radii = box0.extents + box1.extents;
+            overlaps = radii - math.abs(delta);
+            // Keep the general SAT path's exact behavior for invalid/overflow cases.
+            return PhysicsSafety.IsFinite(radii) && PhysicsSafety.IsFinite(overlaps)
+                && PhysicsSafety.IsFinite(overlaps + new fix3(fix._0_0001));
         }
 
         private static bool TestBoxAxis(

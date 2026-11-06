@@ -6,6 +6,9 @@ The following [index-reuse report](CCD-reuse.md) records the next improvement to
 15.094 ms/update and the linear island-sleep path.
 The [dirty synchronization report](CCD-sync.md) records the next change, with a
 new same-host pinned pair of 12.564 to 8.235 ms/update and retained unpinned data.
+The [dense/solver follow-up](DenseContacts.md) adds per-frame latency and rolling
+trace gates; its independent 1,000-body pairs are 95.125 to 59.884 ms for dense
+contacts, 24.238 to 20.076 ms for stacking, and 7.219 to 6.792 ms for CCD.
 
 The CSV separates **simulation** time/allocation from **state hashing**. The old
 ElapsedMs field included both and should not be compared directly with the new

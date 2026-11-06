@@ -4,7 +4,7 @@ This document defines the intended content of Maphy.Net and the engineering
 order for turning the current draft into a reliable deterministic math and
 physics library.
 
-## Execution plan (2026-11-05)
+## Execution plan (updated 2026-11-06)
 
 The stages below define the next delivery order. The detailed inventory after
 this plan describes the target API, rather than a claim that every item is done.
@@ -48,8 +48,17 @@ with reserved hierarchical bitsets, preserving global ascending update order.
 The pinned six-pair CCD median is 12.564 to 8.235 ms/update (1.53x); unpinned
 results show substantial scheduling variation and are retained for comparison.
 Both backends pass 145 test groups with unchanged frozen replay fingerprints.
-See Benchmarks/CCD-sync.md. Dense contacts and remaining CCD TOI/refit work are
-next; Unity execution remains pending.
+See Benchmarks/CCD-sync.md.
+
+The dense/solver pass now measures 100/1,000 bodies with per-frame P50/P95/P99,
+rolling trace hashes and any-frame overflow gates. Canonical box SAT skips duplicate
+axes, the solver caches stable reciprocals per update, and CCD skips unchanged
+velocity-envelope refreshes. Independent 1,000-body pairs are 95.125 to 59.884 ms
+for dense contacts, 24.238 to 20.076 ms for stacking and 7.219 to 6.792 ms for CCD.
+Both backends pass 147 test groups and the unchanged frozen corpus. See
+Benchmarks/DenseContacts.md for source revisions, conditions, raw CSVs and limits.
+Contact generation and velocity solving still dominate dense workloads; further
+split these costs before the next change. Unity execution remains pending.
 Keep TriangleMesh, HeightField, ConvexHull, and additional joints behind these
 correctness and capability gates.
 
